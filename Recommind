@@ -1,0 +1,2848 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "7bac556f",
+   "metadata": {
+    "_cell_guid": "b1076dfc-b9ad-4769-8c92-a6c4dae69d19",
+    "_uuid": "8f2839f25d086af736a60e9eeb907d3b93b6e0e5",
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:37:27.985303Z",
+     "iopub.status.busy": "2025-07-04T21:37:27.985064Z",
+     "iopub.status.idle": "2025-07-04T21:37:58.980357Z",
+     "shell.execute_reply": "2025-07-04T21:37:58.979746Z"
+    },
+    "papermill": {
+     "duration": 31.004934,
+     "end_time": "2025-07-04T21:37:58.981652",
+     "exception": false,
+     "start_time": "2025-07-04T21:37:27.976718",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-07-04 21:37:45.030578: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:477] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered\n",
+      "WARNING: All log messages before absl::InitializeLog() is called are written to STDERR\n",
+      "E0000 00:00:1751665065.263615      19 cuda_dnn.cc:8310] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered\n",
+      "E0000 00:00:1751665065.330429      19 cuda_blas.cc:1418] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered\n"
+     ]
+    }
+   ],
+   "source": [
+    "\n",
+    "# Data treatment\n",
+    "\n",
+    "import numpy as np # linear algebra\n",
+    "import polars as pl # data processing, CSV file I/O (e.g. pd.read_csv)\n",
+    "\n",
+    "# Deep Learning\n",
+    "\n",
+    "from transformers import AutoModelForSequenceClassification\n",
+    "from transformers import AutoTokenizer, AutoConfig\n",
+    "from transformers import DataCollatorWithPadding\n",
+    "import torch                  \n",
+    "import torch.nn as nn          \n",
+    "import torch.nn.functional as F  \n",
+    "import torch.optim as optim  \n",
+    "from torch.optim.lr_scheduler import StepLR\n",
+    "from torch.utils.data import DataLoader, Dataset, TensorDataset\n",
+    "\n",
+    "# GPU\n",
+    "device = torch.device(\"cuda\" if torch.cuda.is_available() else \"cpu\")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "2d6dc431",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:37:58.996070Z",
+     "iopub.status.busy": "2025-07-04T21:37:58.995435Z",
+     "iopub.status.idle": "2025-07-04T21:38:30.501339Z",
+     "shell.execute_reply": "2025-07-04T21:38:30.500716Z"
+    },
+    "papermill": {
+     "duration": 31.51414,
+     "end_time": "2025-07-04T21:38:30.502762",
+     "exception": false,
+     "start_time": "2025-07-04T21:37:58.988622",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_data = pl.read_csv('/kaggle/input/amazon-books-reviews/books_data.csv')\n",
+    "df_ratings = pl.read_csv('/kaggle/input/amazon-books-reviews/Books_rating.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "c53a0da4",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:30.516915Z",
+     "iopub.status.busy": "2025-07-04T21:38:30.516272Z",
+     "iopub.status.idle": "2025-07-04T21:38:30.538512Z",
+     "shell.execute_reply": "2025-07-04T21:38:30.537812Z"
+    },
+    "papermill": {
+     "duration": 0.030005,
+     "end_time": "2025-07-04T21:38:30.539506",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.509501",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div><style>\n",
+       ".dataframe > thead > tr,\n",
+       ".dataframe > tbody > tr {\n",
+       "  text-align: right;\n",
+       "  white-space: pre-wrap;\n",
+       "}\n",
+       "</style>\n",
+       "<small>shape: (212_404, 10)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Title</th><th>description</th><th>authors</th><th>image</th><th>previewLink</th><th>publisher</th><th>publishedDate</th><th>infoLink</th><th>categories</th><th>ratingsCount</th></tr><tr><td>str</td><td>str</td><td>str</td><td>str</td><td>str</td><td>str</td><td>str</td><td>str</td><td>str</td><td>f64</td></tr></thead><tbody><tr><td>&quot;Its Only Art If Its Well Hung!&quot;</td><td>null</td><td>&quot;[&#x27;Julie Strain&#x27;]&quot;</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.nl/books?i…</td><td>null</td><td>&quot;1996&quot;</td><td>&quot;http://books.google.nl/books?i…</td><td>&quot;[&#x27;Comics &amp; Graphic Novels&#x27;]&quot;</td><td>null</td></tr><tr><td>&quot;Dr. Seuss: American Icon&quot;</td><td>&quot;Philip Nel takes a fascinating…</td><td>&quot;[&#x27;Philip Nel&#x27;]&quot;</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.nl/books?i…</td><td>&quot;A&amp;C Black&quot;</td><td>&quot;2005-01-01&quot;</td><td>&quot;http://books.google.nl/books?i…</td><td>&quot;[&#x27;Biography &amp; Autobiography&#x27;]&quot;</td><td>null</td></tr><tr><td>&quot;Wonderful Worship in Smaller C…</td><td>&quot;This resource includes twelve …</td><td>&quot;[&#x27;David R. Ray&#x27;]&quot;</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.nl/books?i…</td><td>null</td><td>&quot;2000&quot;</td><td>&quot;http://books.google.nl/books?i…</td><td>&quot;[&#x27;Religion&#x27;]&quot;</td><td>null</td></tr><tr><td>&quot;Whispers of the Wicked Saints&quot;</td><td>&quot;Julia Thomas finds her life sp…</td><td>&quot;[&#x27;Veronica Haddon&#x27;]&quot;</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.nl/books?i…</td><td>&quot;iUniverse&quot;</td><td>&quot;2005-02&quot;</td><td>&quot;http://books.google.nl/books?i…</td><td>&quot;[&#x27;Fiction&#x27;]&quot;</td><td>null</td></tr><tr><td>&quot;Nation Dance: Religion, Identi…</td><td>null</td><td>&quot;[&#x27;Edward Long&#x27;]&quot;</td><td>null</td><td>&quot;http://books.google.nl/books?i…</td><td>null</td><td>&quot;2003-03-01&quot;</td><td>&quot;http://books.google.nl/books?i…</td><td>null</td><td>null</td></tr><tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr><tr><td>&quot;The Orphan Of Ellis Island (Ti…</td><td>&quot;During a school trip to Ellis …</td><td>&quot;[&#x27;Elvira Woodruff&#x27;]&quot;</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.com/books?…</td><td>&quot;Scholastic Paperbacks&quot;</td><td>&quot;2000-06-01&quot;</td><td>&quot;http://books.google.com/books?…</td><td>&quot;[&#x27;Juvenile Fiction&#x27;]&quot;</td><td>2.0</td></tr><tr><td>&quot;Red Boots for Christmas&quot;</td><td>&quot;Everyone in the village of Fri…</td><td>null</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.com/books?…</td><td>null</td><td>&quot;1995&quot;</td><td>&quot;http://books.google.com/books?…</td><td>&quot;[&#x27;Juvenile Fiction&#x27;]&quot;</td><td>null</td></tr><tr><td>&quot;Mamaw&quot;</td><td>&quot;Give your Mamaw a useful, beau…</td><td>&quot;[&#x27;Wild Wild Cabbage&#x27;]&quot;</td><td>null</td><td>&quot;http://books.google.com/books?…</td><td>null</td><td>&quot;2018-01-17&quot;</td><td>&quot;http://books.google.com/books?…</td><td>null</td><td>null</td></tr><tr><td>&quot;The Autograph Man&quot;</td><td>&quot;Alex-Li Tandem sells autograph…</td><td>&quot;[&#x27;Zadie Smith&#x27;]&quot;</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.com/books?…</td><td>&quot;Vintage&quot;</td><td>&quot;2003-08-12&quot;</td><td>&quot;https://play.google.com/store/…</td><td>&quot;[&#x27;Fiction&#x27;]&quot;</td><td>19.0</td></tr><tr><td>&quot;Student&#x27;s Solutions Manual for…</td><td>&quot;Discover the many ways mathema…</td><td>&quot;[&#x27;David B. Johnson&#x27;, &#x27;Thomas A…</td><td>&quot;http://books.google.com/books/…</td><td>&quot;http://books.google.com/books?…</td><td>&quot;Brooks/Cole Publishing Company&quot;</td><td>&quot;1998-01-01&quot;</td><td>&quot;http://books.google.com/books?…</td><td>null</td><td>null</td></tr></tbody></table></div>"
+      ],
+      "text/plain": [
+       "shape: (212_404, 10)\n",
+       "┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐\n",
+       "│ Title     ┆ descripti ┆ authors   ┆ image     ┆ … ┆ published ┆ infoLink  ┆ categorie ┆ ratingsC │\n",
+       "│ ---       ┆ on        ┆ ---       ┆ ---       ┆   ┆ Date      ┆ ---       ┆ s         ┆ ount     │\n",
+       "│ str       ┆ ---       ┆ str       ┆ str       ┆   ┆ ---       ┆ str       ┆ ---       ┆ ---      │\n",
+       "│           ┆ str       ┆           ┆           ┆   ┆ str       ┆           ┆ str       ┆ f64      │\n",
+       "╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡\n",
+       "│ Its Only  ┆ null      ┆ ['Julie   ┆ http://bo ┆ … ┆ 1996      ┆ http://bo ┆ ['Comics  ┆ null     │\n",
+       "│ Art If    ┆           ┆ Strain']  ┆ oks.googl ┆   ┆           ┆ oks.googl ┆ & Graphic ┆          │\n",
+       "│ Its Well  ┆           ┆           ┆ e.com/boo ┆   ┆           ┆ e.nl/book ┆ Novels']  ┆          │\n",
+       "│ Hung!     ┆           ┆           ┆ ks/…      ┆   ┆           ┆ s?i…      ┆           ┆          │\n",
+       "│ Dr.       ┆ Philip    ┆ ['Philip  ┆ http://bo ┆ … ┆ 2005-01-0 ┆ http://bo ┆ ['Biograp ┆ null     │\n",
+       "│ Seuss:    ┆ Nel takes ┆ Nel']     ┆ oks.googl ┆   ┆ 1         ┆ oks.googl ┆ hy & Auto ┆          │\n",
+       "│ American  ┆ a fascina ┆           ┆ e.com/boo ┆   ┆           ┆ e.nl/book ┆ biography ┆          │\n",
+       "│ Icon      ┆ ting…     ┆           ┆ ks/…      ┆   ┆           ┆ s?i…      ┆ ']        ┆          │\n",
+       "│ Wonderful ┆ This      ┆ ['David   ┆ http://bo ┆ … ┆ 2000      ┆ http://bo ┆ ['Religio ┆ null     │\n",
+       "│ Worship   ┆ resource  ┆ R. Ray']  ┆ oks.googl ┆   ┆           ┆ oks.googl ┆ n']       ┆          │\n",
+       "│ in        ┆ includes  ┆           ┆ e.com/boo ┆   ┆           ┆ e.nl/book ┆           ┆          │\n",
+       "│ Smaller   ┆ twelve …  ┆           ┆ ks/…      ┆   ┆           ┆ s?i…      ┆           ┆          │\n",
+       "│ C…        ┆           ┆           ┆           ┆   ┆           ┆           ┆           ┆          │\n",
+       "│ Whispers  ┆ Julia     ┆ ['Veronic ┆ http://bo ┆ … ┆ 2005-02   ┆ http://bo ┆ ['Fiction ┆ null     │\n",
+       "│ of the    ┆ Thomas    ┆ a         ┆ oks.googl ┆   ┆           ┆ oks.googl ┆ ']        ┆          │\n",
+       "│ Wicked    ┆ finds her ┆ Haddon']  ┆ e.com/boo ┆   ┆           ┆ e.nl/book ┆           ┆          │\n",
+       "│ Saints    ┆ life sp…  ┆           ┆ ks/…      ┆   ┆           ┆ s?i…      ┆           ┆          │\n",
+       "│ Nation    ┆ null      ┆ ['Edward  ┆ null      ┆ … ┆ 2003-03-0 ┆ http://bo ┆ null      ┆ null     │\n",
+       "│ Dance:    ┆           ┆ Long']    ┆           ┆   ┆ 1         ┆ oks.googl ┆           ┆          │\n",
+       "│ Religion, ┆           ┆           ┆           ┆   ┆           ┆ e.nl/book ┆           ┆          │\n",
+       "│ Identi…   ┆           ┆           ┆           ┆   ┆           ┆ s?i…      ┆           ┆          │\n",
+       "│ …         ┆ …         ┆ …         ┆ …         ┆ … ┆ …         ┆ …         ┆ …         ┆ …        │\n",
+       "│ The       ┆ During a  ┆ ['Elvira  ┆ http://bo ┆ … ┆ 2000-06-0 ┆ http://bo ┆ ['Juvenil ┆ 2.0      │\n",
+       "│ Orphan Of ┆ school    ┆ Woodruff' ┆ oks.googl ┆   ┆ 1         ┆ oks.googl ┆ e         ┆          │\n",
+       "│ Ellis     ┆ trip to   ┆ ]         ┆ e.com/boo ┆   ┆           ┆ e.com/boo ┆ Fiction'] ┆          │\n",
+       "│ Island    ┆ Ellis …   ┆           ┆ ks/…      ┆   ┆           ┆ ks?…      ┆           ┆          │\n",
+       "│ (Ti…      ┆           ┆           ┆           ┆   ┆           ┆           ┆           ┆          │\n",
+       "│ Red Boots ┆ Everyone  ┆ null      ┆ http://bo ┆ … ┆ 1995      ┆ http://bo ┆ ['Juvenil ┆ null     │\n",
+       "│ for       ┆ in the    ┆           ┆ oks.googl ┆   ┆           ┆ oks.googl ┆ e         ┆          │\n",
+       "│ Christmas ┆ village   ┆           ┆ e.com/boo ┆   ┆           ┆ e.com/boo ┆ Fiction'] ┆          │\n",
+       "│           ┆ of Fri…   ┆           ┆ ks/…      ┆   ┆           ┆ ks?…      ┆           ┆          │\n",
+       "│ Mamaw     ┆ Give your ┆ ['Wild    ┆ null      ┆ … ┆ 2018-01-1 ┆ http://bo ┆ null      ┆ null     │\n",
+       "│           ┆ Mamaw a   ┆ Wild      ┆           ┆   ┆ 7         ┆ oks.googl ┆           ┆          │\n",
+       "│           ┆ useful,   ┆ Cabbage'] ┆           ┆   ┆           ┆ e.com/boo ┆           ┆          │\n",
+       "│           ┆ beau…     ┆           ┆           ┆   ┆           ┆ ks?…      ┆           ┆          │\n",
+       "│ The       ┆ Alex-Li   ┆ ['Zadie   ┆ http://bo ┆ … ┆ 2003-08-1 ┆ https://p ┆ ['Fiction ┆ 19.0     │\n",
+       "│ Autograph ┆ Tandem    ┆ Smith']   ┆ oks.googl ┆   ┆ 2         ┆ lay.googl ┆ ']        ┆          │\n",
+       "│ Man       ┆ sells aut ┆           ┆ e.com/boo ┆   ┆           ┆ e.com/sto ┆           ┆          │\n",
+       "│           ┆ ograph…   ┆           ┆ ks/…      ┆   ┆           ┆ re/…      ┆           ┆          │\n",
+       "│ Student's ┆ Discover  ┆ ['David   ┆ http://bo ┆ … ┆ 1998-01-0 ┆ http://bo ┆ null      ┆ null     │\n",
+       "│ Solutions ┆ the many  ┆ B.        ┆ oks.googl ┆   ┆ 1         ┆ oks.googl ┆           ┆          │\n",
+       "│ Manual    ┆ ways      ┆ Johnson', ┆ e.com/boo ┆   ┆           ┆ e.com/boo ┆           ┆          │\n",
+       "│ for…      ┆ mathema…  ┆ 'Thomas   ┆ ks/…      ┆   ┆           ┆ ks?…      ┆           ┆          │\n",
+       "│           ┆           ┆ A…        ┆           ┆   ┆           ┆           ┆           ┆          │\n",
+       "└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘"
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_data"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "1739e31d",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006166,
+     "end_time": "2025-07-04T21:38:30.552217",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.546051",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "I'm going to remove the description, to save a bit of processing because embeddings would take a considerable time, image, previewlink, publishedDate, infoLink.\n",
+    "\n",
+    "The rest I'm going to use."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "4a3e1935",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:30.566109Z",
+     "iopub.status.busy": "2025-07-04T21:38:30.565616Z",
+     "iopub.status.idle": "2025-07-04T21:38:30.571639Z",
+     "shell.execute_reply": "2025-07-04T21:38:30.571047Z"
+    },
+    "papermill": {
+     "duration": 0.014172,
+     "end_time": "2025-07-04T21:38:30.572635",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.558463",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div><style>\n",
+       ".dataframe > thead > tr,\n",
+       ".dataframe > tbody > tr {\n",
+       "  text-align: right;\n",
+       "  white-space: pre-wrap;\n",
+       "}\n",
+       "</style>\n",
+       "<small>shape: (3_000_000, 10)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Id</th><th>Title</th><th>Price</th><th>User_id</th><th>profileName</th><th>review/helpfulness</th><th>review/score</th><th>review/time</th><th>review/summary</th><th>review/text</th></tr><tr><td>str</td><td>str</td><td>f64</td><td>str</td><td>str</td><td>str</td><td>f64</td><td>i64</td><td>str</td><td>str</td></tr></thead><tbody><tr><td>&quot;1882931173&quot;</td><td>&quot;Its Only Art If Its Well Hung!&quot;</td><td>null</td><td>&quot;AVCGYZL8FQQTD&quot;</td><td>&quot;Jim of Oz &quot;jim-of-oz&quot;&quot;</td><td>&quot;7/7&quot;</td><td>4.0</td><td>940636800</td><td>&quot;Nice collection of Julie Strai…</td><td>&quot;This is only for Julie Strain …</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A30TK6U7DNS82R&quot;</td><td>&quot;Kevin Killian&quot;</td><td>&quot;10/10&quot;</td><td>5.0</td><td>1095724800</td><td>&quot;Really Enjoyed It&quot;</td><td>&quot;I don&#x27;t care much for Dr. Seus…</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A3UH4UZ4RSVO82&quot;</td><td>&quot;John Granger&quot;</td><td>&quot;10/11&quot;</td><td>5.0</td><td>1078790400</td><td>&quot;Essential for every personal a…</td><td>&quot;If people become the books the…</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A2MVUWT453QH61&quot;</td><td>&quot;Roy E. Perry &quot;amateur philosop…</td><td>&quot;7/7&quot;</td><td>4.0</td><td>1090713600</td><td>&quot;Phlip Nel gives silly Seuss a …</td><td>&quot;Theodore Seuss Geisel (1904-19…</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A22X4XUPKF66MR&quot;</td><td>&quot;D. H. Richards &quot;ninthwavestore…</td><td>&quot;3/3&quot;</td><td>4.0</td><td>1107993600</td><td>&quot;Good academic overview&quot;</td><td>&quot;Philip Nel - Dr. Seuss: Americ…</td></tr><tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>null</td><td>null</td><td>&quot;14/19&quot;</td><td>4.0</td><td>937612800</td><td>&quot;Difficult&quot;</td><td>&quot;This is an extremely difficult…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>&quot;A1SMUB9ASL5L9Y&quot;</td><td>&quot;jafrank&quot;</td><td>&quot;1/1&quot;</td><td>4.0</td><td>1331683200</td><td>&quot;Quite good and ahead of its ti…</td><td>&quot;This is pretty interesting. Co…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>&quot;A2AQMEKZKK5EE4&quot;</td><td>&quot;L. L. Poulos &quot;Muslim Mom&quot;&quot;</td><td>&quot;0/0&quot;</td><td>4.0</td><td>1180224000</td><td>&quot;Easier reads of those not well…</td><td>&quot;This is a good book but very e…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>&quot;A18SQGYBKS852K&quot;</td><td>&quot;Julia A. Klein &quot;knitting rat&quot;&quot;</td><td>&quot;1/11&quot;</td><td>5.0</td><td>1163030400</td><td>&quot;Yes, it is cheaper than the Un…</td><td>&quot;My daughter, a freshman at Ind…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>null</td><td>null</td><td>&quot;7/49&quot;</td><td>1.0</td><td>905385600</td><td>&quot;Collingwood&#x27;s ideas sink in a …</td><td>&quot;The guy has a few good ideas b…</td></tr></tbody></table></div>"
+      ],
+      "text/plain": [
+       "shape: (3_000_000, 10)\n",
+       "┌────────────┬────────────┬───────┬────────────┬───┬───────────┬───────────┬───────────┬───────────┐\n",
+       "│ Id         ┆ Title      ┆ Price ┆ User_id    ┆ … ┆ review/sc ┆ review/ti ┆ review/su ┆ review/te │\n",
+       "│ ---        ┆ ---        ┆ ---   ┆ ---        ┆   ┆ ore       ┆ me        ┆ mmary     ┆ xt        │\n",
+       "│ str        ┆ str        ┆ f64   ┆ str        ┆   ┆ ---       ┆ ---       ┆ ---       ┆ ---       │\n",
+       "│            ┆            ┆       ┆            ┆   ┆ f64       ┆ i64       ┆ str       ┆ str       │\n",
+       "╞════════════╪════════════╪═══════╪════════════╪═══╪═══════════╪═══════════╪═══════════╪═══════════╡\n",
+       "│ 1882931173 ┆ Its Only   ┆ null  ┆ AVCGYZL8FQ ┆ … ┆ 4.0       ┆ 940636800 ┆ Nice coll ┆ This is   │\n",
+       "│            ┆ Art If Its ┆       ┆ QTD        ┆   ┆           ┆           ┆ ection of ┆ only for  │\n",
+       "│            ┆ Well Hung! ┆       ┆            ┆   ┆           ┆           ┆ Julie     ┆ Julie     │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ Strai…    ┆ Strain …  │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A30TK6U7DN ┆ … ┆ 5.0       ┆ 109572480 ┆ Really    ┆ I don't   │\n",
+       "│            ┆ American   ┆       ┆ S82R       ┆   ┆           ┆ 0         ┆ Enjoyed   ┆ care much │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ It        ┆ for Dr.   │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ Seus…     │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A3UH4UZ4RS ┆ … ┆ 5.0       ┆ 107879040 ┆ Essential ┆ If people │\n",
+       "│            ┆ American   ┆       ┆ VO82       ┆   ┆           ┆ 0         ┆ for every ┆ become    │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ personal  ┆ the books │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ a…        ┆ the…      │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A2MVUWT453 ┆ … ┆ 4.0       ┆ 109071360 ┆ Phlip Nel ┆ Theodore  │\n",
+       "│            ┆ American   ┆       ┆ QH61       ┆   ┆           ┆ 0         ┆ gives     ┆ Seuss     │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ silly     ┆ Geisel    │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ Seuss a … ┆ (1904-19… │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A22X4XUPKF ┆ … ┆ 4.0       ┆ 110799360 ┆ Good      ┆ Philip    │\n",
+       "│            ┆ American   ┆       ┆ 66MR       ┆   ┆           ┆ 0         ┆ academic  ┆ Nel - Dr. │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ overview  ┆ Seuss:    │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ Americ…   │\n",
+       "│ …          ┆ …          ┆ …     ┆ …          ┆ … ┆ …         ┆ …         ┆ …         ┆ …         │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ null       ┆ … ┆ 4.0       ┆ 937612800 ┆ Difficult ┆ This is   │\n",
+       "│            ┆ of History ┆       ┆            ┆   ┆           ┆           ┆           ┆ an        │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ extremely │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ difficult │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ …         │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ A1SMUB9ASL ┆ … ┆ 4.0       ┆ 133168320 ┆ Quite     ┆ This is   │\n",
+       "│            ┆ of History ┆       ┆ 5L9Y       ┆   ┆           ┆ 0         ┆ good and  ┆ pretty    │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ ahead of  ┆ interesti │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ its ti…   ┆ ng. Co…   │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ A2AQMEKZKK ┆ … ┆ 4.0       ┆ 118022400 ┆ Easier    ┆ This is a │\n",
+       "│            ┆ of History ┆       ┆ 5EE4       ┆   ┆           ┆ 0         ┆ reads of  ┆ good book │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ those not ┆ but very  │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ well…     ┆ e…        │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ A18SQGYBKS ┆ … ┆ 5.0       ┆ 116303040 ┆ Yes, it   ┆ My        │\n",
+       "│            ┆ of History ┆       ┆ 852K       ┆   ┆           ┆ 0         ┆ is        ┆ daughter, │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ cheaper   ┆ a         │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ than the  ┆ freshman  │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ Un…       ┆ at Ind…   │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ null       ┆ … ┆ 1.0       ┆ 905385600 ┆ Collingwo ┆ The guy   │\n",
+       "│            ┆ of History ┆       ┆            ┆   ┆           ┆           ┆ od's      ┆ has a few │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ ideas     ┆ good      │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ sink in a ┆ ideas b…  │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ …         ┆           │\n",
+       "└────────────┴────────────┴───────┴────────────┴───┴───────────┴───────────┴───────────┴───────────┘"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_ratings"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "58f857e9",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006308,
+     "end_time": "2025-07-04T21:38:30.585597",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.579289",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Like I said, I won't work with embeddings here, so the summary and text will be removed as well."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "07eeafeb",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006357,
+     "end_time": "2025-07-04T21:38:30.598392",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.592035",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Pre-processing"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4ed2e107",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006437,
+     "end_time": "2025-07-04T21:38:30.611240",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.604803",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### EDA\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "5b6962f0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:30.625117Z",
+     "iopub.status.busy": "2025-07-04T21:38:30.624908Z",
+     "iopub.status.idle": "2025-07-04T21:38:30.630536Z",
+     "shell.execute_reply": "2025-07-04T21:38:30.629923Z"
+    },
+    "papermill": {
+     "duration": 0.013751,
+     "end_time": "2025-07-04T21:38:30.631617",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.617866",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div><style>\n",
+       ".dataframe > thead > tr,\n",
+       ".dataframe > tbody > tr {\n",
+       "  text-align: right;\n",
+       "  white-space: pre-wrap;\n",
+       "}\n",
+       "</style>\n",
+       "<small>shape: (3_000_000, 10)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Id</th><th>Title</th><th>Price</th><th>User_id</th><th>profileName</th><th>review/helpfulness</th><th>review/score</th><th>review/time</th><th>review/summary</th><th>review/text</th></tr><tr><td>str</td><td>str</td><td>f64</td><td>str</td><td>str</td><td>str</td><td>f64</td><td>i64</td><td>str</td><td>str</td></tr></thead><tbody><tr><td>&quot;1882931173&quot;</td><td>&quot;Its Only Art If Its Well Hung!&quot;</td><td>null</td><td>&quot;AVCGYZL8FQQTD&quot;</td><td>&quot;Jim of Oz &quot;jim-of-oz&quot;&quot;</td><td>&quot;7/7&quot;</td><td>4.0</td><td>940636800</td><td>&quot;Nice collection of Julie Strai…</td><td>&quot;This is only for Julie Strain …</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A30TK6U7DNS82R&quot;</td><td>&quot;Kevin Killian&quot;</td><td>&quot;10/10&quot;</td><td>5.0</td><td>1095724800</td><td>&quot;Really Enjoyed It&quot;</td><td>&quot;I don&#x27;t care much for Dr. Seus…</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A3UH4UZ4RSVO82&quot;</td><td>&quot;John Granger&quot;</td><td>&quot;10/11&quot;</td><td>5.0</td><td>1078790400</td><td>&quot;Essential for every personal a…</td><td>&quot;If people become the books the…</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A2MVUWT453QH61&quot;</td><td>&quot;Roy E. Perry &quot;amateur philosop…</td><td>&quot;7/7&quot;</td><td>4.0</td><td>1090713600</td><td>&quot;Phlip Nel gives silly Seuss a …</td><td>&quot;Theodore Seuss Geisel (1904-19…</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>null</td><td>&quot;A22X4XUPKF66MR&quot;</td><td>&quot;D. H. Richards &quot;ninthwavestore…</td><td>&quot;3/3&quot;</td><td>4.0</td><td>1107993600</td><td>&quot;Good academic overview&quot;</td><td>&quot;Philip Nel - Dr. Seuss: Americ…</td></tr><tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>null</td><td>null</td><td>&quot;14/19&quot;</td><td>4.0</td><td>937612800</td><td>&quot;Difficult&quot;</td><td>&quot;This is an extremely difficult…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>&quot;A1SMUB9ASL5L9Y&quot;</td><td>&quot;jafrank&quot;</td><td>&quot;1/1&quot;</td><td>4.0</td><td>1331683200</td><td>&quot;Quite good and ahead of its ti…</td><td>&quot;This is pretty interesting. Co…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>&quot;A2AQMEKZKK5EE4&quot;</td><td>&quot;L. L. Poulos &quot;Muslim Mom&quot;&quot;</td><td>&quot;0/0&quot;</td><td>4.0</td><td>1180224000</td><td>&quot;Easier reads of those not well…</td><td>&quot;This is a good book but very e…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>&quot;A18SQGYBKS852K&quot;</td><td>&quot;Julia A. Klein &quot;knitting rat&quot;&quot;</td><td>&quot;1/11&quot;</td><td>5.0</td><td>1163030400</td><td>&quot;Yes, it is cheaper than the Un…</td><td>&quot;My daughter, a freshman at Ind…</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>null</td><td>null</td><td>&quot;7/49&quot;</td><td>1.0</td><td>905385600</td><td>&quot;Collingwood&#x27;s ideas sink in a …</td><td>&quot;The guy has a few good ideas b…</td></tr></tbody></table></div>"
+      ],
+      "text/plain": [
+       "shape: (3_000_000, 10)\n",
+       "┌────────────┬────────────┬───────┬────────────┬───┬───────────┬───────────┬───────────┬───────────┐\n",
+       "│ Id         ┆ Title      ┆ Price ┆ User_id    ┆ … ┆ review/sc ┆ review/ti ┆ review/su ┆ review/te │\n",
+       "│ ---        ┆ ---        ┆ ---   ┆ ---        ┆   ┆ ore       ┆ me        ┆ mmary     ┆ xt        │\n",
+       "│ str        ┆ str        ┆ f64   ┆ str        ┆   ┆ ---       ┆ ---       ┆ ---       ┆ ---       │\n",
+       "│            ┆            ┆       ┆            ┆   ┆ f64       ┆ i64       ┆ str       ┆ str       │\n",
+       "╞════════════╪════════════╪═══════╪════════════╪═══╪═══════════╪═══════════╪═══════════╪═══════════╡\n",
+       "│ 1882931173 ┆ Its Only   ┆ null  ┆ AVCGYZL8FQ ┆ … ┆ 4.0       ┆ 940636800 ┆ Nice coll ┆ This is   │\n",
+       "│            ┆ Art If Its ┆       ┆ QTD        ┆   ┆           ┆           ┆ ection of ┆ only for  │\n",
+       "│            ┆ Well Hung! ┆       ┆            ┆   ┆           ┆           ┆ Julie     ┆ Julie     │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ Strai…    ┆ Strain …  │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A30TK6U7DN ┆ … ┆ 5.0       ┆ 109572480 ┆ Really    ┆ I don't   │\n",
+       "│            ┆ American   ┆       ┆ S82R       ┆   ┆           ┆ 0         ┆ Enjoyed   ┆ care much │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ It        ┆ for Dr.   │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ Seus…     │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A3UH4UZ4RS ┆ … ┆ 5.0       ┆ 107879040 ┆ Essential ┆ If people │\n",
+       "│            ┆ American   ┆       ┆ VO82       ┆   ┆           ┆ 0         ┆ for every ┆ become    │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ personal  ┆ the books │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ a…        ┆ the…      │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A2MVUWT453 ┆ … ┆ 4.0       ┆ 109071360 ┆ Phlip Nel ┆ Theodore  │\n",
+       "│            ┆ American   ┆       ┆ QH61       ┆   ┆           ┆ 0         ┆ gives     ┆ Seuss     │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ silly     ┆ Geisel    │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ Seuss a … ┆ (1904-19… │\n",
+       "│ 0826414346 ┆ Dr. Seuss: ┆ null  ┆ A22X4XUPKF ┆ … ┆ 4.0       ┆ 110799360 ┆ Good      ┆ Philip    │\n",
+       "│            ┆ American   ┆       ┆ 66MR       ┆   ┆           ┆ 0         ┆ academic  ┆ Nel - Dr. │\n",
+       "│            ┆ Icon       ┆       ┆            ┆   ┆           ┆           ┆ overview  ┆ Seuss:    │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ Americ…   │\n",
+       "│ …          ┆ …          ┆ …     ┆ …          ┆ … ┆ …         ┆ …         ┆ …         ┆ …         │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ null       ┆ … ┆ 4.0       ┆ 937612800 ┆ Difficult ┆ This is   │\n",
+       "│            ┆ of History ┆       ┆            ┆   ┆           ┆           ┆           ┆ an        │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ extremely │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ difficult │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆           ┆ …         │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ A1SMUB9ASL ┆ … ┆ 4.0       ┆ 133168320 ┆ Quite     ┆ This is   │\n",
+       "│            ┆ of History ┆       ┆ 5L9Y       ┆   ┆           ┆ 0         ┆ good and  ┆ pretty    │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ ahead of  ┆ interesti │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ its ti…   ┆ ng. Co…   │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ A2AQMEKZKK ┆ … ┆ 4.0       ┆ 118022400 ┆ Easier    ┆ This is a │\n",
+       "│            ┆ of History ┆       ┆ 5EE4       ┆   ┆           ┆ 0         ┆ reads of  ┆ good book │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ those not ┆ but very  │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ well…     ┆ e…        │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ A18SQGYBKS ┆ … ┆ 5.0       ┆ 116303040 ┆ Yes, it   ┆ My        │\n",
+       "│            ┆ of History ┆       ┆ 852K       ┆   ┆           ┆ 0         ┆ is        ┆ daughter, │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ cheaper   ┆ a         │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ than the  ┆ freshman  │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ Un…       ┆ at Ind…   │\n",
+       "│ B000NSLVCU ┆ The Idea   ┆ null  ┆ null       ┆ … ┆ 1.0       ┆ 905385600 ┆ Collingwo ┆ The guy   │\n",
+       "│            ┆ of History ┆       ┆            ┆   ┆           ┆           ┆ od's      ┆ has a few │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ ideas     ┆ good      │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ sink in a ┆ ideas b…  │\n",
+       "│            ┆            ┆       ┆            ┆   ┆           ┆           ┆ …         ┆           │\n",
+       "└────────────┴────────────┴───────┴────────────┴───┴───────────┴───────────┴───────────┴───────────┘"
+      ]
+     },
+     "execution_count": 5,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_ratings"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "7128df1d",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006419,
+     "end_time": "2025-07-04T21:38:30.644889",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.638470",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "I'm going to use only the ratings, since our project will use model-based collaborative filtering."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "bc8c551c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:30.658969Z",
+     "iopub.status.busy": "2025-07-04T21:38:30.658446Z",
+     "iopub.status.idle": "2025-07-04T21:38:30.833797Z",
+     "shell.execute_reply": "2025-07-04T21:38:30.833061Z"
+    },
+    "papermill": {
+     "duration": 0.183507,
+     "end_time": "2025-07-04T21:38:30.834936",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.651429",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "212404"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "len(df_ratings['Title'].unique())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "3d3f97d0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:30.849722Z",
+     "iopub.status.busy": "2025-07-04T21:38:30.849492Z",
+     "iopub.status.idle": "2025-07-04T21:38:33.644237Z",
+     "shell.execute_reply": "2025-07-04T21:38:33.643443Z"
+    },
+    "papermill": {
+     "duration": 2.803714,
+     "end_time": "2025-07-04T21:38:33.645689",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:30.841975",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "\n",
+    "filtering_ratings_per_user = df_ratings.group_by(\"User_id\").agg(\n",
+    "    pl.count(\"review/score\").alias(\"total_reviews\")\n",
+    ")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "8ceb72f4",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:33.660687Z",
+     "iopub.status.busy": "2025-07-04T21:38:33.660459Z",
+     "iopub.status.idle": "2025-07-04T21:38:33.702491Z",
+     "shell.execute_reply": "2025-07-04T21:38:33.701802Z"
+    },
+    "papermill": {
+     "duration": 0.050634,
+     "end_time": "2025-07-04T21:38:33.703610",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:33.652976",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div><style>\n",
+       ".dataframe > thead > tr,\n",
+       ".dataframe > tbody > tr {\n",
+       "  text-align: right;\n",
+       "  white-space: pre-wrap;\n",
+       "}\n",
+       "</style>\n",
+       "<small>shape: (9, 2)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>statistic</th><th>value</th></tr><tr><td>str</td><td>f64</td></tr></thead><tbody><tr><td>&quot;count&quot;</td><td>1.008973e6</td></tr><tr><td>&quot;null_count&quot;</td><td>0.0</td></tr><tr><td>&quot;mean&quot;</td><td>2.97332</td></tr><tr><td>&quot;std&quot;</td><td>559.412556</td></tr><tr><td>&quot;min&quot;</td><td>1.0</td></tr><tr><td>&quot;25%&quot;</td><td>1.0</td></tr><tr><td>&quot;50%&quot;</td><td>1.0</td></tr><tr><td>&quot;75%&quot;</td><td>2.0</td></tr><tr><td>&quot;max&quot;</td><td>561787.0</td></tr></tbody></table></div>"
+      ],
+      "text/plain": [
+       "shape: (9, 2)\n",
+       "┌────────────┬────────────┐\n",
+       "│ statistic  ┆ value      │\n",
+       "│ ---        ┆ ---        │\n",
+       "│ str        ┆ f64        │\n",
+       "╞════════════╪════════════╡\n",
+       "│ count      ┆ 1.008973e6 │\n",
+       "│ null_count ┆ 0.0        │\n",
+       "│ mean       ┆ 2.97332    │\n",
+       "│ std        ┆ 559.412556 │\n",
+       "│ min        ┆ 1.0        │\n",
+       "│ 25%        ┆ 1.0        │\n",
+       "│ 50%        ┆ 1.0        │\n",
+       "│ 75%        ┆ 2.0        │\n",
+       "│ max        ┆ 561787.0   │\n",
+       "└────────────┴────────────┘"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "filtering_ratings_per_user['total_reviews'].describe()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "daabe45d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:33.719912Z",
+     "iopub.status.busy": "2025-07-04T21:38:33.719690Z",
+     "iopub.status.idle": "2025-07-04T21:38:33.725695Z",
+     "shell.execute_reply": "2025-07-04T21:38:33.725171Z"
+    },
+    "papermill": {
+     "duration": 0.015943,
+     "end_time": "2025-07-04T21:38:33.726649",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:33.710706",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "reviews_median = filtering_ratings_per_user['total_reviews'].median()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0676181a",
+   "metadata": {
+    "papermill": {
+     "duration": 0.00692,
+     "end_time": "2025-07-04T21:38:33.740457",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:33.733537",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Since our dataset is asymmetric, I'm using median instead of mean"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "69112849",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:33.755106Z",
+     "iopub.status.busy": "2025-07-04T21:38:33.754902Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.259736Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.258893Z"
+    },
+    "papermill": {
+     "duration": 0.513703,
+     "end_time": "2025-07-04T21:38:34.260975",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:33.747272",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The number of books is 212404\n",
+      "---------------------------\n",
+      "The number of users is 1008973\n",
+      "---------------------------\n",
+      "The number of ratings per user is 1.0 \n",
+      "---------------------------\n",
+      "Full rating matrix will have: 214309901092 elements\n",
+      "---------------------------\n",
+      "Number of rating: 3000000\n",
+      "---------------------------\n",
+      "Therefore: 0.0013998419973663024% of matrix is filled\n"
+     ]
+    }
+   ],
+   "source": [
+    "n_items = len(df_ratings['Title'].unique())\n",
+    "n_users = len(df_ratings['User_id'].unique())\n",
+    "\n",
+    "print(f\"The number of books is {n_items}\")\n",
+    "print(\"---------------------------\")\n",
+    "print(f\"The number of users is {n_users}\")\n",
+    "print(\"---------------------------\")\n",
+    "print(f'The number of ratings per user is {reviews_median} ')\n",
+    "print(\"---------------------------\")\n",
+    "print(f'Full rating matrix will have: {n_users*n_items} elements')\n",
+    "print(\"---------------------------\")\n",
+    "print(f'Number of rating: {len(df_ratings)}')\n",
+    "print(\"---------------------------\")\n",
+    "print(f'Therefore: {(len(df_ratings) / (n_users * n_items)) * 100}% of matrix is filled')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "39cd2eb0",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006861,
+     "end_time": "2025-07-04T21:38:34.275129",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.268268",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### Processing"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "92036ee3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.335794Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.334961Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.340528Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.340011Z"
+    },
+    "papermill": {
+     "duration": 0.014279,
+     "end_time": "2025-07-04T21:38:34.341533",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.327254",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_data = df_data[['Title', 'authors', 'categories', 'ratingsCount']]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "7815110e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.356504Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.356294Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.366077Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.365584Z"
+    },
+    "papermill": {
+     "duration": 0.018662,
+     "end_time": "2025-07-04T21:38:34.367123",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.348461",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_data = df_data.with_columns(\n",
+    "    pl.col(\"ratingsCount\").fill_null(0),\n",
+    "    pl.col(\"categories\").fill_null(\"No Category\")\n",
+    ")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "95f49b5c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.381990Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.381807Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.665000Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.664354Z"
+    },
+    "papermill": {
+     "duration": 0.292181,
+     "end_time": "2025-07-04T21:38:34.666299",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.374118",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div><style>\n",
+       ".dataframe > thead > tr,\n",
+       ".dataframe > tbody > tr {\n",
+       "  text-align: right;\n",
+       "  white-space: pre-wrap;\n",
+       "}\n",
+       "</style>\n",
+       "<small>shape: (9, 11)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>statistic</th><th>Id</th><th>Title</th><th>Price</th><th>User_id</th><th>profileName</th><th>review/helpfulness</th><th>review/score</th><th>review/time</th><th>review/summary</th><th>review/text</th></tr><tr><td>str</td><td>str</td><td>str</td><td>f64</td><td>str</td><td>str</td><td>str</td><td>f64</td><td>f64</td><td>str</td><td>str</td></tr></thead><tbody><tr><td>&quot;count&quot;</td><td>&quot;3000000&quot;</td><td>&quot;2999792&quot;</td><td>481171.0</td><td>&quot;2438213&quot;</td><td>&quot;2438114&quot;</td><td>&quot;3000000&quot;</td><td>3e6</td><td>3e6</td><td>&quot;2999962&quot;</td><td>&quot;2999992&quot;</td></tr><tr><td>&quot;null_count&quot;</td><td>&quot;0&quot;</td><td>&quot;208&quot;</td><td>2.518829e6</td><td>&quot;561787&quot;</td><td>&quot;561886&quot;</td><td>&quot;0&quot;</td><td>0.0</td><td>0.0</td><td>&quot;38&quot;</td><td>&quot;8&quot;</td></tr><tr><td>&quot;mean&quot;</td><td>null</td><td>null</td><td>21.762656</td><td>null</td><td>null</td><td>null</td><td>4.215289</td><td>1.1323e9</td><td>null</td><td>null</td></tr><tr><td>&quot;std&quot;</td><td>null</td><td>null</td><td>26.206541</td><td>null</td><td>null</td><td>null</td><td>1.203054</td><td>1.4932e8</td><td>null</td><td>null</td></tr><tr><td>&quot;min&quot;</td><td>&quot;0001047604&quot;</td><td>&quot;&quot; Film technique, &quot; and, &quot; Fil…</td><td>1.0</td><td>&quot;A00109803PZJ91RLT7DPN&quot;</td><td>&quot;\u001a&quot;</td><td>&quot;0/0&quot;</td><td>1.0</td><td>-1.0</td><td>&quot;!&quot;</td><td>&quot;\u0011The Tao of Muhammad Ali\u0012 is t…</td></tr><tr><td>&quot;25%&quot;</td><td>null</td><td>null</td><td>10.78</td><td>null</td><td>null</td><td>null</td><td>4.0</td><td>9.999072e8</td><td>null</td><td>null</td></tr><tr><td>&quot;50%&quot;</td><td>null</td><td>null</td><td>14.93</td><td>null</td><td>null</td><td>null</td><td>5.0</td><td>1.1283e9</td><td>null</td><td>null</td></tr><tr><td>&quot;75%&quot;</td><td>null</td><td>null</td><td>23.95</td><td>null</td><td>null</td><td>null</td><td>5.0</td><td>1.2691e9</td><td>null</td><td>null</td></tr><tr><td>&quot;max&quot;</td><td>&quot;B0064P287I&quot;</td><td>&quot;you can do anything with crepe…</td><td>995.0</td><td>&quot;AZZZZW74AAX75&quot;</td><td>&quot;~~~~~~~&quot;</td><td>&quot;997/1090&quot;</td><td>5.0</td><td>1.3624e9</td><td>&quot;~~~~~~~~~~~~~~~~~~~~~~~~~~&quot;</td><td>&quot;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~…</td></tr></tbody></table></div>"
+      ],
+      "text/plain": [
+       "shape: (9, 11)\n",
+       "┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐\n",
+       "│ statistic ┆ Id        ┆ Title     ┆ Price     ┆ … ┆ review/sc ┆ review/ti ┆ review/su ┆ review/t │\n",
+       "│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ore       ┆ me        ┆ mmary     ┆ ext      │\n",
+       "│ str       ┆ str       ┆ str       ┆ f64       ┆   ┆ ---       ┆ ---       ┆ ---       ┆ ---      │\n",
+       "│           ┆           ┆           ┆           ┆   ┆ f64       ┆ f64       ┆ str       ┆ str      │\n",
+       "╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡\n",
+       "│ count     ┆ 3000000   ┆ 2999792   ┆ 481171.0  ┆ … ┆ 3e6       ┆ 3e6       ┆ 2999962   ┆ 2999992  │\n",
+       "│ null_coun ┆ 0         ┆ 208       ┆ 2.518829e ┆ … ┆ 0.0       ┆ 0.0       ┆ 38        ┆ 8        │\n",
+       "│ t         ┆           ┆           ┆ 6         ┆   ┆           ┆           ┆           ┆          │\n",
+       "│ mean      ┆ null      ┆ null      ┆ 21.762656 ┆ … ┆ 4.215289  ┆ 1.1323e9  ┆ null      ┆ null     │\n",
+       "│ std       ┆ null      ┆ null      ┆ 26.206541 ┆ … ┆ 1.203054  ┆ 1.4932e8  ┆ null      ┆ null     │\n",
+       "│ min       ┆ 000104760 ┆ \" Film    ┆ 1.0       ┆ … ┆ 1.0       ┆ -1.0      ┆ !         ┆ \u0011The Tao │\n",
+       "│           ┆ 4         ┆ technique ┆           ┆   ┆           ┆           ┆           ┆ of       │\n",
+       "│           ┆           ┆ , \" and,  ┆           ┆   ┆           ┆           ┆           ┆ Muhammad │\n",
+       "│           ┆           ┆ \" Fil…    ┆           ┆   ┆           ┆           ┆           ┆ Ali\u0012 is  │\n",
+       "│           ┆           ┆           ┆           ┆   ┆           ┆           ┆           ┆ t…       │\n",
+       "│ 25%       ┆ null      ┆ null      ┆ 10.78     ┆ … ┆ 4.0       ┆ 9.999072e ┆ null      ┆ null     │\n",
+       "│           ┆           ┆           ┆           ┆   ┆           ┆ 8         ┆           ┆          │\n",
+       "│ 50%       ┆ null      ┆ null      ┆ 14.93     ┆ … ┆ 5.0       ┆ 1.1283e9  ┆ null      ┆ null     │\n",
+       "│ 75%       ┆ null      ┆ null      ┆ 23.95     ┆ … ┆ 5.0       ┆ 1.2691e9  ┆ null      ┆ null     │\n",
+       "│ max       ┆ B0064P287 ┆ you can   ┆ 995.0     ┆ … ┆ 5.0       ┆ 1.3624e9  ┆ ~~~~~~~~~ ┆ ~~~~~~~~ │\n",
+       "│           ┆ I         ┆ do        ┆           ┆   ┆           ┆           ┆ ~~~~~~~~~ ┆ ~~~~~~~~ │\n",
+       "│           ┆           ┆ anything  ┆           ┆   ┆           ┆           ┆ ~~~~~~~~  ┆ ~~~~~~~~ │\n",
+       "│           ┆           ┆ with      ┆           ┆   ┆           ┆           ┆           ┆ ~~~~~~…  │\n",
+       "│           ┆           ┆ crepe…    ┆           ┆   ┆           ┆           ┆           ┆          │\n",
+       "└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘"
+      ]
+     },
+     "execution_count": 13,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_ratings.describe()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "3b05d62f",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007074,
+     "end_time": "2025-07-04T21:38:34.680906",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.673832",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "As expected, we have a lot of NaN values in User_id."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "30e129f2",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006792,
+     "end_time": "2025-07-04T21:38:34.694680",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.687888",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Before treating the Nan Values, I'm going to remove the columns that we won't use"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "0ee19e16",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.709720Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.709254Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.712518Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.712000Z"
+    },
+    "papermill": {
+     "duration": 0.011948,
+     "end_time": "2025-07-04T21:38:34.713565",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.701617",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_ratings2 = df_ratings[['Id','Title', 'User_id', 'review/score']]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "428db961",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.728426Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.728004Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.732556Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.732061Z"
+    },
+    "papermill": {
+     "duration": 0.01294,
+     "end_time": "2025-07-04T21:38:34.733508",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.720568",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div><style>\n",
+       ".dataframe > thead > tr,\n",
+       ".dataframe > tbody > tr {\n",
+       "  text-align: right;\n",
+       "  white-space: pre-wrap;\n",
+       "}\n",
+       "</style>\n",
+       "<small>shape: (3_000_000, 4)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Id</th><th>Title</th><th>User_id</th><th>review/score</th></tr><tr><td>str</td><td>str</td><td>str</td><td>f64</td></tr></thead><tbody><tr><td>&quot;1882931173&quot;</td><td>&quot;Its Only Art If Its Well Hung!&quot;</td><td>&quot;AVCGYZL8FQQTD&quot;</td><td>4.0</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>&quot;A30TK6U7DNS82R&quot;</td><td>5.0</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>&quot;A3UH4UZ4RSVO82&quot;</td><td>5.0</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>&quot;A2MVUWT453QH61&quot;</td><td>4.0</td></tr><tr><td>&quot;0826414346&quot;</td><td>&quot;Dr. Seuss: American Icon&quot;</td><td>&quot;A22X4XUPKF66MR&quot;</td><td>4.0</td></tr><tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>4.0</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>&quot;A1SMUB9ASL5L9Y&quot;</td><td>4.0</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>&quot;A2AQMEKZKK5EE4&quot;</td><td>4.0</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>&quot;A18SQGYBKS852K&quot;</td><td>5.0</td></tr><tr><td>&quot;B000NSLVCU&quot;</td><td>&quot;The Idea of History&quot;</td><td>null</td><td>1.0</td></tr></tbody></table></div>"
+      ],
+      "text/plain": [
+       "shape: (3_000_000, 4)\n",
+       "┌────────────┬────────────────────────────────┬────────────────┬──────────────┐\n",
+       "│ Id         ┆ Title                          ┆ User_id        ┆ review/score │\n",
+       "│ ---        ┆ ---                            ┆ ---            ┆ ---          │\n",
+       "│ str        ┆ str                            ┆ str            ┆ f64          │\n",
+       "╞════════════╪════════════════════════════════╪════════════════╪══════════════╡\n",
+       "│ 1882931173 ┆ Its Only Art If Its Well Hung! ┆ AVCGYZL8FQQTD  ┆ 4.0          │\n",
+       "│ 0826414346 ┆ Dr. Seuss: American Icon       ┆ A30TK6U7DNS82R ┆ 5.0          │\n",
+       "│ 0826414346 ┆ Dr. Seuss: American Icon       ┆ A3UH4UZ4RSVO82 ┆ 5.0          │\n",
+       "│ 0826414346 ┆ Dr. Seuss: American Icon       ┆ A2MVUWT453QH61 ┆ 4.0          │\n",
+       "│ 0826414346 ┆ Dr. Seuss: American Icon       ┆ A22X4XUPKF66MR ┆ 4.0          │\n",
+       "│ …          ┆ …                              ┆ …              ┆ …            │\n",
+       "│ B000NSLVCU ┆ The Idea of History            ┆ null           ┆ 4.0          │\n",
+       "│ B000NSLVCU ┆ The Idea of History            ┆ A1SMUB9ASL5L9Y ┆ 4.0          │\n",
+       "│ B000NSLVCU ┆ The Idea of History            ┆ A2AQMEKZKK5EE4 ┆ 4.0          │\n",
+       "│ B000NSLVCU ┆ The Idea of History            ┆ A18SQGYBKS852K ┆ 5.0          │\n",
+       "│ B000NSLVCU ┆ The Idea of History            ┆ null           ┆ 1.0          │\n",
+       "└────────────┴────────────────────────────────┴────────────────┴──────────────┘"
+      ]
+     },
+     "execution_count": 15,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_ratings2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "da087d7d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.748880Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.748469Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.788926Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.788357Z"
+    },
+    "papermill": {
+     "duration": 0.049253,
+     "end_time": "2025-07-04T21:38:34.790112",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.740859",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_ratings2 = df_ratings2.drop_nulls()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2b0006c9",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007188,
+     "end_time": "2025-07-04T21:38:34.805221",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.798033",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "I dropped the nulls here because we can't generate fake data or consider it \"non-user\". "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "d02453a9",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007365,
+     "end_time": "2025-07-04T21:38:34.819744",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.812379",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "I can't use these IDs in the way they are right now. Im going to treatment them using ordinalencoder, since the matrix factorization presuppose continuous IDs"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "ce0928cf",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:34.835480Z",
+     "iopub.status.busy": "2025-07-04T21:38:34.835282Z",
+     "iopub.status.idle": "2025-07-04T21:38:34.986477Z",
+     "shell.execute_reply": "2025-07-04T21:38:34.985877Z"
+    },
+    "papermill": {
+     "duration": 0.160728,
+     "end_time": "2025-07-04T21:38:34.987893",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.827165",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_merged = df_ratings2.join(\n",
+    "    df_data.select([\"Title\", \"authors\", \"categories\", \"ratingsCount\"]),\n",
+    "    on='Title',\n",
+    "    how='left'\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "d12f227d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:35.004595Z",
+     "iopub.status.busy": "2025-07-04T21:38:35.004378Z",
+     "iopub.status.idle": "2025-07-04T21:38:45.013794Z",
+     "shell.execute_reply": "2025-07-04T21:38:45.013193Z"
+    },
+    "papermill": {
+     "duration": 10.019368,
+     "end_time": "2025-07-04T21:38:45.015152",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:34.995784",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "n_users = 1008961, n_items = 216014\n"
+     ]
+    }
+   ],
+   "source": [
+    "import polars as pl\n",
+    "from sklearn.preprocessing import OrdinalEncoder, StandardScaler, LabelEncoder\n",
+    "import numpy as np\n",
+    "\n",
+    "# 0. Preprocessing the strings\n",
+    "\n",
+    "df_merged = df_merged.with_columns(  \n",
+    "\n",
+    "    pl.col(\"categories\").str.replace_all('[','',literal=True).str.replace_all(']','',literal=True),\n",
+    "    pl.col(\"authors\").str.replace_all('[','',literal=True).str.replace_all(']','',literal=True),\n",
+    "\n",
+    ")\n",
+    "\n",
+    "\n",
+    "# 1. Ordinal Encoder\n",
+    "encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)\n",
+    "encoded = encoder.fit_transform(df_merged.select(['User_id', 'Id']).to_numpy())\n",
+    "\n",
+    "df_encoded = df_merged.with_columns([\n",
+    "    pl.Series(name='User_id', values=encoded[:, 0].astype(int)),\n",
+    "    pl.Series(name='Id', values=encoded[:, 1].astype(int)),\n",
+    "])\n",
+    "\n",
+    "df_encoded = df_encoded.filter(\n",
+    "    (pl.col('User_id') != -1) & (pl.col('Id') != -1)\n",
+    ")\n",
+    "\n",
+    "n_users = df_encoded.select(pl.col('User_id').max()).item() + 1\n",
+    "n_items = df_encoded.select(pl.col('Id').max()).item() + 1\n",
+    "\n",
+    "print(f\"n_users = {n_users}, n_items = {n_items}\")\n",
+    "\n",
+    "\n",
+    "# 2. StandardScaler\n",
+    "#scaler = StandardScaler()\n",
+    "\n",
+    "#scores = df_encoded.select('review/score').to_numpy()\n",
+    "\n",
+    "#scores_scaled = scaler.fit_transform(scores)\n",
+    "\n",
+    "#df_encoded = df_encoded.with_columns(\n",
+    "#    pl.Series(name=\"review/score_scaled\", values=scores_scaled.flatten())\n",
+    "#)\n",
+    "\n",
+    "# 3. LabelEncoder\n",
+    "\n",
+    "\n",
+    "authors = df_encoded[\"authors\"].to_numpy()\n",
+    "categories = df_encoded[\"categories\"].to_numpy()\n",
+    "\n",
+    "enc_authors = LabelEncoder()\n",
+    "enc_categories = LabelEncoder()\n",
+    "\n",
+    "authors_encoded = enc_authors.fit_transform(authors)\n",
+    "categories_encoded = enc_categories.fit_transform(categories)\n",
+    "\n",
+    "# Se quiser colocar de volta no DataFrame\n",
+    "df_encoded = df_encoded.with_columns([\n",
+    "    pl.Series(\"authors\", authors_encoded),\n",
+    "    pl.Series(\"categories\", categories_encoded)\n",
+    "])\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "928eeca5",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:45.031042Z",
+     "iopub.status.busy": "2025-07-04T21:38:45.030838Z",
+     "iopub.status.idle": "2025-07-04T21:38:45.246823Z",
+     "shell.execute_reply": "2025-07-04T21:38:45.246241Z"
+    },
+    "papermill": {
+     "duration": 0.225256,
+     "end_time": "2025-07-04T21:38:45.248181",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:45.022925",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_encodeds = df_encoded.sample(fraction=1.0, shuffle=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "980d1c0a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:45.264068Z",
+     "iopub.status.busy": "2025-07-04T21:38:45.263859Z",
+     "iopub.status.idle": "2025-07-04T21:38:45.847399Z",
+     "shell.execute_reply": "2025-07-04T21:38:45.846388Z"
+    },
+    "papermill": {
+     "duration": 0.592913,
+     "end_time": "2025-07-04T21:38:45.848904",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:45.255991",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "df_encodeds = df_encodeds.to_pandas()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "2dd58cad",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:45.865186Z",
+     "iopub.status.busy": "2025-07-04T21:38:45.864558Z",
+     "iopub.status.idle": "2025-07-04T21:38:45.910851Z",
+     "shell.execute_reply": "2025-07-04T21:38:45.910156Z"
+    },
+    "papermill": {
+     "duration": 0.055341,
+     "end_time": "2025-07-04T21:38:45.911931",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:45.856590",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Number of authors: 124098\n",
+      "Number of genders: 10669\n"
+     ]
+    }
+   ],
+   "source": [
+    "n_genders = len(df_encodeds['categories'].unique())\n",
+    "n_authors = len(df_encodeds['authors'].unique())\n",
+    "\n",
+    "print(f'Number of authors: {n_authors}')\n",
+    "print(f'Number of genders: {n_genders}')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c9e77047",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007119,
+     "end_time": "2025-07-04T21:38:45.926478",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:45.919359",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "To avoid data leak, because we have a lot of users, im going to divide the dataset per user, not only per percentage"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "id": "002fc48a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:45.942182Z",
+     "iopub.status.busy": "2025-07-04T21:38:45.941734Z",
+     "iopub.status.idle": "2025-07-04T21:38:47.203470Z",
+     "shell.execute_reply": "2025-07-04T21:38:47.202633Z"
+    },
+    "papermill": {
+     "duration": 1.271096,
+     "end_time": "2025-07-04T21:38:47.204894",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:45.933798",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "\n",
+    "user_score = df_encodeds.groupby(\"User_id\")[\"review/score\"].median().reset_index()\n",
+    "\n",
+    "# 2. Stratified split \n",
+    "train_users, temp_users = train_test_split(\n",
+    "    user_score,\n",
+    "    test_size=0.4,\n",
+    "    stratify=user_score[\"review/score\"],\n",
+    "    random_state=42\n",
+    ")\n",
+    "\n",
+    "val_users, test_users = train_test_split(\n",
+    "    temp_users,\n",
+    "    test_size=0.5,\n",
+    "    stratify=temp_users[\"review/score\"],\n",
+    "    random_state=42\n",
+    ")\n",
+    "\n",
+    "df_train = df_encodeds[df_encodeds[\"User_id\"].isin(train_users[\"User_id\"])]\n",
+    "df_val = df_encodeds[df_encodeds[\"User_id\"].isin(val_users[\"User_id\"])]\n",
+    "df_test = df_encodeds[df_encodeds[\"User_id\"].isin(test_users[\"User_id\"])]\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "944674c0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:47.221073Z",
+     "iopub.status.busy": "2025-07-04T21:38:47.220582Z",
+     "iopub.status.idle": "2025-07-04T21:38:47.287538Z",
+     "shell.execute_reply": "2025-07-04T21:38:47.286791Z"
+    },
+    "papermill": {
+     "duration": 0.076207,
+     "end_time": "2025-07-04T21:38:47.288826",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:47.212619",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "count    1.464092e+06\n",
+       "mean     4.229312e+00\n",
+       "std      1.177830e+00\n",
+       "min      1.000000e+00\n",
+       "25%      4.000000e+00\n",
+       "50%      5.000000e+00\n",
+       "75%      5.000000e+00\n",
+       "max      5.000000e+00\n",
+       "Name: review/score, dtype: float64"
+      ]
+     },
+     "execution_count": 23,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_train['review/score'].describe()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "79bb557b",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:47.307574Z",
+     "iopub.status.busy": "2025-07-04T21:38:47.307009Z",
+     "iopub.status.idle": "2025-07-04T21:38:48.113766Z",
+     "shell.execute_reply": "2025-07-04T21:38:48.113163Z"
+    },
+    "papermill": {
+     "duration": 0.817296,
+     "end_time": "2025-07-04T21:38:48.115023",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:47.297727",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Creating the book dict for decoding\n",
+    "\n",
+    "book_df = df_encodeds[['Id', 'Title']]\n",
+    "\n",
+    "book_dict = dict(zip(book_df['Id'], book_df['Title']))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8c7c1845",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007505,
+     "end_time": "2025-07-04T21:38:48.130372",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:48.122867",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Data Processing Class for Pytorch"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "29e707ad",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:48.147126Z",
+     "iopub.status.busy": "2025-07-04T21:38:48.146923Z",
+     "iopub.status.idle": "2025-07-04T21:38:48.150666Z",
+     "shell.execute_reply": "2025-07-04T21:38:48.150127Z"
+    },
+    "papermill": {
+     "duration": 0.012989,
+     "end_time": "2025-07-04T21:38:48.151717",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:48.138728",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "n_users = torch.tensor(n_users, dtype=torch.int64)\n",
+    "n_items = torch.tensor(n_items, dtype=torch.int64)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "916cd76a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:48.167666Z",
+     "iopub.status.busy": "2025-07-04T21:38:48.167466Z",
+     "iopub.status.idle": "2025-07-04T21:38:48.173098Z",
+     "shell.execute_reply": "2025-07-04T21:38:48.172609Z"
+    },
+    "papermill": {
+     "duration": 0.014468,
+     "end_time": "2025-07-04T21:38:48.174016",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:48.159548",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "## Data Processing Class for Pytorch\n",
+    "\n",
+    "# Creating dataloader \n",
+    "\n",
+    "from torch.utils.data.dataset import Dataset\n",
+    "from torch.utils.data import DataLoader\n",
+    "\n",
+    "class Loader(Dataset):\n",
+    "    def __init__(self, df):\n",
+    "        super().__init__()\n",
+    "        self.ratings = df\n",
+    "\n",
+    "        self.ratings = self.ratings.drop([\"Title\"], axis=1)\n",
+    "\n",
+    "\n",
+    "        self.X = self.ratings.drop(['review/score'], axis=1).to_numpy()\n",
+    "        self.y = self.ratings['review/score'].to_numpy()\n",
+    "\n",
+    "\n",
+    "        self.X, self.y = torch.tensor(self.X, dtype=torch.long), torch.tensor(self.y)\n",
+    "        self.X, self.y = self.X.to(device='cuda'), self.y.to(device='cuda') \n",
+    "\n",
+    "    \n",
+    "\n",
+    "    def __getitem__(self, index):\n",
+    "        # Return features and label as tensors\n",
+    "        return self.X[index], self.y[index]\n",
+    "\n",
+    "    def __len__(self):\n",
+    "        # Total number of samples\n",
+    "        return len(self.ratings)\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "599bd55d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:48.189508Z",
+     "iopub.status.busy": "2025-07-04T21:38:48.189312Z",
+     "iopub.status.idle": "2025-07-04T21:38:48.208016Z",
+     "shell.execute_reply": "2025-07-04T21:38:48.207500Z"
+    },
+    "papermill": {
+     "duration": 0.027602,
+     "end_time": "2025-07-04T21:38:48.209010",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:48.181408",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "array([5., 3., 2., 4., 1.])"
+      ]
+     },
+     "execution_count": 27,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df_train['review/score'].unique()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "id": "a370ce6f",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:48.224511Z",
+     "iopub.status.busy": "2025-07-04T21:38:48.224319Z",
+     "iopub.status.idle": "2025-07-04T21:38:48.585024Z",
+     "shell.execute_reply": "2025-07-04T21:38:48.584250Z"
+    },
+    "papermill": {
+     "duration": 0.370282,
+     "end_time": "2025-07-04T21:38:48.586647",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:48.216365",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train_dataset = Loader(df_train)\n",
+    "test_dataset = Loader(df_test)\n",
+    "eval_dataset = Loader(df_val)\n",
+    "\n",
+    "trainloader = DataLoader(train_dataset, batch_size=2048, shuffle=True, drop_last=True)\n",
+    "testloader = DataLoader(test_dataset, batch_size=2048, shuffle=True, drop_last=True)\n",
+    "evalloader = DataLoader(eval_dataset, batch_size=2048, shuffle=True, drop_last=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "id": "0bf6fb29",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:38:48.604484Z",
+     "iopub.status.busy": "2025-07-04T21:38:48.603970Z",
+     "iopub.status.idle": "2025-07-04T21:39:00.651971Z",
+     "shell.execute_reply": "2025-07-04T21:39:00.651150Z"
+    },
+    "papermill": {
+     "duration": 12.057503,
+     "end_time": "2025-07-04T21:39:00.653226",
+     "exception": false,
+     "start_time": "2025-07-04T21:38:48.595723",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The number of batches is 714\n"
+     ]
+    }
+   ],
+   "source": [
+    "batch_numbers = []\n",
+    "for batch, (X,y)in enumerate(trainloader):\n",
+    "    batch_numbers.append(batch)\n",
+    "    \n",
+    "print(f'The number of batches is {len(batch_numbers)}')\n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "87178e61",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007456,
+     "end_time": "2025-07-04T21:39:00.668843",
+     "exception": false,
+     "start_time": "2025-07-04T21:39:00.661387",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Model Creation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "id": "0e452f29",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:39:00.684579Z",
+     "iopub.status.busy": "2025-07-04T21:39:00.684377Z",
+     "iopub.status.idle": "2025-07-04T21:39:00.693035Z",
+     "shell.execute_reply": "2025-07-04T21:39:00.692545Z"
+    },
+    "papermill": {
+     "duration": 0.017782,
+     "end_time": "2025-07-04T21:39:00.693959",
+     "exception": false,
+     "start_time": "2025-07-04T21:39:00.676177",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "\n",
+    "import torch\n",
+    "import torch.nn as nn\n",
+    "import numpy as np\n",
+    "from torch.autograd import Variable\n",
+    "from tqdm.notebook import tqdm\n",
+    "\n",
+    "class NeuMF(nn.Module):\n",
+    "    def __init__(self, n_users, n_items,n_genders, n_authors, device, n_factors=8):\n",
+    "        super().__init__()\n",
+    "\n",
+    "        # Embeddings for GMF (Generalized Matrix Factorization) path\n",
+    "        self.user_gmf = nn.Embedding(n_users, n_factors)\n",
+    "        self.item_gmf = nn.Embedding(n_items, n_factors)\n",
+    "\n",
+    "        # Embeddings for MLP path\n",
+    "        self.user_mlp = nn.Embedding(n_users, n_factors)\n",
+    "        self.item_mlp = nn.Embedding(n_items, n_factors)\n",
+    "        self.item_gender_emb = nn.Embedding(n_genders, n_factors)\n",
+    "        self.item_authors_emb = nn.Embedding(n_authors, n_factors)\n",
+    "\n",
+    "        \n",
+    "        # Initialize embeddings with small uniform values\n",
+    "        self.user_gmf.weight.data.uniform_(0, 0.05)\n",
+    "        self.item_gmf.weight.data.uniform_(0, 0.05)\n",
+    "        self.user_mlp.weight.data.uniform_(0, 0.05)\n",
+    "        self.item_mlp.weight.data.uniform_(0, 0.05)\n",
+    "\n",
+    "        # MLP input: user + item embedding + text embedding\n",
+    "        input_dim = n_factors * 2\n",
+    "\n",
+    "        # MLP: several layers with ReLU and Dropout to prevent overfitting\n",
+    "        self.mlp = nn.Sequential(\n",
+    "            nn.Linear(input_dim, 1024),\n",
+    "            nn.GELU(),\n",
+    "            nn.Dropout(p=0.4),\n",
+    "            nn.Linear(1024, 512),\n",
+    "            nn.GELU(),\n",
+    "            nn.Dropout(p=0.4),\n",
+    "            nn.Linear(512, 256),\n",
+    "            nn.GELU(),\n",
+    "            nn.Dropout(p=0.4),\n",
+    "            nn.Linear(256, 32)\n",
+    "        )\n",
+    "\n",
+    "        # Final prediction layer: GMF + MLP outputs concatenated\n",
+    "        self.final_layer = nn.Linear(n_factors + 32, 1)\n",
+    "\n",
+    "    def forward(self, data):\n",
+    "        users = data[:, 1]\n",
+    "        items = data[:, 0]\n",
+    "        genders = data[:, 3]\n",
+    "        authors = data[:, 2]\n",
+    "        ratingsCount = data[:, 4]\n",
+    "\n",
+    "\n",
+    "\n",
+    "        # GMF path\n",
+    "        gmf_user = self.user_gmf(users)\n",
+    "        gmf_item = self.item_gmf(items)\n",
+    "        gmf_out = gmf_user * gmf_item  # element-wise product\n",
+    "\n",
+    "        # Gender and authors \n",
+    "        gender_emb = self.item_gender_emb(genders)\n",
+    "        authors_emb = self.item_authors_emb(authors)\n",
+    "\n",
+    "\n",
+    "        # MLP path\n",
+    "        mlp_user = self.user_mlp(users)\n",
+    "        mlp_item = self.item_mlp(items)\n",
+    "        mlp_items = torch.cat([mlp_item, gender_emb, authors_emb,ratingsCount.unsqueeze(1)], dim=1)\n",
+    "\n",
+    "        # Concatenate user, item, and text embeddings\n",
+    "        mlp_input = torch.cat([mlp_user, mlp_item], dim=1)\n",
+    "       # print(mlp_input.shape)\n",
+    "        mlp_out = self.mlp(mlp_input)\n",
+    "\n",
+    "        # Combine GMF and MLP paths and make final prediction\n",
+    "        final_input = torch.cat([gmf_out, mlp_out], dim=1)\n",
+    "        out = self.final_layer(final_input).squeeze(1)\n",
+    "\n",
+    "        return out\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "62b7b4a5",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007343,
+     "end_time": "2025-07-04T21:39:00.708908",
+     "exception": false,
+     "start_time": "2025-07-04T21:39:00.701565",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Training"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "id": "9b076280",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:39:00.724721Z",
+     "iopub.status.busy": "2025-07-04T21:39:00.724525Z",
+     "iopub.status.idle": "2025-07-04T21:53:15.406072Z",
+     "shell.execute_reply": "2025-07-04T21:53:15.405235Z"
+    },
+    "papermill": {
+     "duration": 854.691109,
+     "end_time": "2025-07-04T21:53:15.407421",
+     "exception": false,
+     "start_time": "2025-07-04T21:39:00.716312",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Model Architecture\n",
+      "\n",
+      "Is running on GPU: True\n",
+      "NeuMF(\n",
+      "  (user_gmf): Embedding(1008961, 16)\n",
+      "  (item_gmf): Embedding(216014, 16)\n",
+      "  (user_mlp): Embedding(1008961, 16)\n",
+      "  (item_mlp): Embedding(216014, 16)\n",
+      "  (item_gender_emb): Embedding(10669, 16)\n",
+      "  (item_authors_emb): Embedding(124098, 16)\n",
+      "  (mlp): Sequential(\n",
+      "    (0): Linear(in_features=32, out_features=1024, bias=True)\n",
+      "    (1): GELU(approximate='none')\n",
+      "    (2): Dropout(p=0.4, inplace=False)\n",
+      "    (3): Linear(in_features=1024, out_features=512, bias=True)\n",
+      "    (4): GELU(approximate='none')\n",
+      "    (5): Dropout(p=0.4, inplace=False)\n",
+      "    (6): Linear(in_features=512, out_features=256, bias=True)\n",
+      "    (7): GELU(approximate='none')\n",
+      "    (8): Dropout(p=0.4, inplace=False)\n",
+      "    (9): Linear(in_features=256, out_features=32, bias=True)\n",
+      "  )\n",
+      "  (final_layer): Linear(in_features=48, out_features=1, bias=True)\n",
+      ") \n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 1.3149428367614746\n",
+      "Batch atual: 500, Batch_Loss: 1.134939432144165\n",
+      "\n",
+      "Iter #0 Loss: 1.579522149736474, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.2901\n",
+      "RMSE: 1.1358\n",
+      "Evaluation Loss: 1.2855573729356382\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.734652042388916\n",
+      "Batch atual: 500, Batch_Loss: 0.7150546908378601\n",
+      "\n",
+      "Iter #1 Loss: 0.7257990718555718, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.3316\n",
+      "RMSE: 1.1540\n",
+      "Evaluation Loss: 1.3269027118763748\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.40455079078674316\n",
+      "Batch atual: 500, Batch_Loss: 0.5169211626052856\n",
+      "\n",
+      "Iter #2 Loss: 0.48620053616558473, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.3695\n",
+      "RMSE: 1.1703\n",
+      "Evaluation Loss: 1.3646835313526962\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.42011192440986633\n",
+      "Batch atual: 500, Batch_Loss: 0.41337651014328003\n",
+      "\n",
+      "Iter #3 Loss: 0.39166333808117554, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4000\n",
+      "RMSE: 1.1832\n",
+      "Evaluation Loss: 1.395051687243066\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.3211764991283417\n",
+      "Batch atual: 500, Batch_Loss: 0.3765600323677063\n",
+      "\n",
+      "Iter #4 Loss: 0.3272280214714403, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.3754\n",
+      "RMSE: 1.1728\n",
+      "Evaluation Loss: 1.3705303320638258\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.25563549995422363\n",
+      "Batch atual: 500, Batch_Loss: 0.2617243826389313\n",
+      "\n",
+      "Iter #5 Loss: 0.2716061462040375, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4134\n",
+      "RMSE: 1.1889\n",
+      "Evaluation Loss: 1.4084200538813765\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.23373404145240784\n",
+      "Batch atual: 500, Batch_Loss: 0.23870450258255005\n",
+      "\n",
+      "Iter #6 Loss: 0.21991699007378906, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4328\n",
+      "RMSE: 1.1970\n",
+      "Evaluation Loss: 1.4277583845330002\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.19329224526882172\n",
+      "Batch atual: 500, Batch_Loss: 0.16803617775440216\n",
+      "\n",
+      "Iter #7 Loss: 0.17292599697239927, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4260\n",
+      "RMSE: 1.1942\n",
+      "Evaluation Loss: 1.4209862204518002\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.14844247698783875\n",
+      "Batch atual: 500, Batch_Loss: 0.13688041269779205\n",
+      "\n",
+      "Iter #8 Loss: 0.1336475476956501, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4320\n",
+      "RMSE: 1.1967\n",
+      "Evaluation Loss: 1.426922775170499\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.10721196979284286\n",
+      "Batch atual: 500, Batch_Loss: 0.1015239804983139\n",
+      "\n",
+      "Iter #9 Loss: 0.1044944420623846, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4361\n",
+      "RMSE: 1.1984\n",
+      "Evaluation Loss: 1.4310599356624847\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.09022621810436249\n",
+      "Batch atual: 500, Batch_Loss: 0.09492277354001999\n",
+      "\n",
+      "Iter #10 Loss: 0.08387105911970139, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4503\n",
+      "RMSE: 1.2043\n",
+      "Evaluation Loss: 1.4451355046279664\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.0641934722661972\n",
+      "Batch atual: 500, Batch_Loss: 0.06312447041273117\n",
+      "\n",
+      "Iter #11 Loss: 0.06902299351280644, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4554\n",
+      "RMSE: 1.2064\n",
+      "Evaluation Loss: 1.4502821914640167\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.05686313658952713\n",
+      "Batch atual: 500, Batch_Loss: 0.05697864666581154\n",
+      "\n",
+      "Iter #12 Loss: 0.05824584568164596, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4512\n",
+      "RMSE: 1.2047\n",
+      "Evaluation Loss: 1.4460902521310113\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.05522231012582779\n",
+      "Batch atual: 500, Batch_Loss: 0.0538867712020874\n",
+      "\n",
+      "Iter #13 Loss: 0.05024379169364937, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4520\n",
+      "RMSE: 1.2050\n",
+      "Evaluation Loss: 1.4468057131617207\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.043115679174661636\n",
+      "Batch atual: 500, Batch_Loss: 0.04615626856684685\n",
+      "\n",
+      "Iter #14 Loss: 0.044201922209030776, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4587\n",
+      "RMSE: 1.2078\n",
+      "Evaluation Loss: 1.4534987883785295\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.04217497259378433\n",
+      "Batch atual: 500, Batch_Loss: 0.035729844123125076\n",
+      "\n",
+      "Iter #15 Loss: 0.039288461573568044, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4681\n",
+      "RMSE: 1.2117\n",
+      "Evaluation Loss: 1.4629037388628705\n",
+      "\n",
+      "    --> New best eval loss: 1.4629. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.03146922215819359\n",
+      "Batch atual: 500, Batch_Loss: 0.03818412497639656\n",
+      "\n",
+      "Iter #16 Loss: 0.03542457966535699, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4625\n",
+      "RMSE: 1.2093\n",
+      "Evaluation Loss: 1.4573017502242374\n",
+      "\n",
+      "    --> New best eval loss: 1.4573. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.03206515312194824\n",
+      "Batch atual: 500, Batch_Loss: 0.032923661172389984\n",
+      "\n",
+      "Iter #17 Loss: 0.03220801087258076, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4516\n",
+      "RMSE: 1.2048\n",
+      "Evaluation Loss: 1.446475335323497\n",
+      "\n",
+      "    --> New best eval loss: 1.4465. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.02904418110847473\n",
+      "Batch atual: 500, Batch_Loss: 0.03333859145641327\n",
+      "\n",
+      "Iter #18 Loss: 0.030008729523783473, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4553\n",
+      "RMSE: 1.2064\n",
+      "Evaluation Loss: 1.4501722049414476\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.026210693642497063\n",
+      "Batch atual: 500, Batch_Loss: 0.02505638636648655\n",
+      "\n",
+      "Iter #19 Loss: 0.02776550709762994, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4350\n",
+      "RMSE: 1.1979\n",
+      "Evaluation Loss: 1.4299477261715423\n",
+      "\n",
+      "    --> New best eval loss: 1.4299. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.02845856174826622\n",
+      "Batch atual: 500, Batch_Loss: 0.022789858281612396\n",
+      "\n",
+      "Iter #20 Loss: 0.025722587517663546, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4498\n",
+      "RMSE: 1.2041\n",
+      "Evaluation Loss: 1.4447014661683237\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.023978471755981445\n",
+      "Batch atual: 500, Batch_Loss: 0.024796757847070694\n",
+      "\n",
+      "Iter #21 Loss: 0.02418610083424494, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4425\n",
+      "RMSE: 1.2010\n",
+      "Evaluation Loss: 1.437397192529635\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.01900661364197731\n",
+      "Batch atual: 500, Batch_Loss: 0.0204697884619236\n",
+      "\n",
+      "Iter #22 Loss: 0.022727579786246566, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4309\n",
+      "RMSE: 1.1962\n",
+      "Evaluation Loss: 1.4257885332423328\n",
+      "\n",
+      "    --> New best eval loss: 1.4258. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.023185832425951958\n",
+      "Batch atual: 500, Batch_Loss: 0.019515270367264748\n",
+      "\n",
+      "Iter #23 Loss: 0.02166532705269274, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4330\n",
+      "RMSE: 1.1971\n",
+      "Evaluation Loss: 1.4279184245974166\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.018723079934716225\n",
+      "Batch atual: 500, Batch_Loss: 0.021501626819372177\n",
+      "\n",
+      "Iter #24 Loss: 0.020569971418242995, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4434\n",
+      "RMSE: 1.2014\n",
+      "Evaluation Loss: 1.4382969679114215\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.02065063826739788\n",
+      "Batch atual: 500, Batch_Loss: 0.019774729385972023\n",
+      "\n",
+      "Iter #25 Loss: 0.019660023141506257, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4334\n",
+      "RMSE: 1.1972\n",
+      "Evaluation Loss: 1.428308687096302\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.017011146992444992\n",
+      "Batch atual: 500, Batch_Loss: 0.016886547207832336\n",
+      "\n",
+      "Iter #26 Loss: 0.018807462429632993, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4262\n",
+      "RMSE: 1.1942\n",
+      "Evaluation Loss: 1.4211324158124432\n",
+      "\n",
+      "    --> New best eval loss: 1.4211. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.01585613563656807\n",
+      "Batch atual: 500, Batch_Loss: 0.0173255056142807\n",
+      "\n",
+      "Iter #27 Loss: 0.018024321894633585, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4260\n",
+      "RMSE: 1.1941\n",
+      "Evaluation Loss: 1.4209126441008875\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.017479224130511284\n",
+      "Batch atual: 500, Batch_Loss: 0.016102999448776245\n",
+      "\n",
+      "Iter #28 Loss: 0.01727574967834003, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4197\n",
+      "RMSE: 1.1915\n",
+      "Evaluation Loss: 1.414677050122688\n",
+      "\n",
+      "    --> New best eval loss: 1.4147. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.016773492097854614\n",
+      "Batch atual: 500, Batch_Loss: 0.015159106813371181\n",
+      "\n",
+      "Iter #29 Loss: 0.016783447147031373, LearningRate: 0.0005\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4139\n",
+      "RMSE: 1.1891\n",
+      "Evaluation Loss: 1.4088821869324004\n",
+      "\n",
+      "    --> New best eval loss: 1.4089. Model saved.\n",
+      "Batch atual: 250, Batch_Loss: 0.01254958938807249\n",
+      "Batch atual: 500, Batch_Loss: 0.01284797303378582\n",
+      "\n",
+      "Iter #30 Loss: 0.014449367071410604, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4231\n",
+      "RMSE: 1.1929\n",
+      "Evaluation Loss: 1.4180819548398789\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.014123784378170967\n",
+      "Batch atual: 500, Batch_Loss: 0.014819152653217316\n",
+      "\n",
+      "Iter #31 Loss: 0.011970449300321127, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4215\n",
+      "RMSE: 1.1923\n",
+      "Evaluation Loss: 1.4165097741172505\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.009963709861040115\n",
+      "Batch atual: 500, Batch_Loss: 0.009197022765874863\n",
+      "\n",
+      "Iter #32 Loss: 0.010587641554532432, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4218\n",
+      "RMSE: 1.1924\n",
+      "Evaluation Loss: 1.4167759144627672\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.011730313301086426\n",
+      "Batch atual: 500, Batch_Loss: 0.008518139831721783\n",
+      "\n",
+      "Iter #33 Loss: 0.009671310783971716, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4196\n",
+      "RMSE: 1.1915\n",
+      "Evaluation Loss: 1.4145976809012837\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.009582651779055595\n",
+      "Batch atual: 500, Batch_Loss: 0.010097953490912914\n",
+      "\n",
+      "Iter #34 Loss: 0.009035815757435827, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4236\n",
+      "RMSE: 1.1932\n",
+      "Evaluation Loss: 1.418572462335963\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.0075698066502809525\n",
+      "Batch atual: 500, Batch_Loss: 0.012212181463837624\n",
+      "\n",
+      "Iter #35 Loss: 0.008589023100707879, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4188\n",
+      "RMSE: 1.1911\n",
+      "Evaluation Loss: 1.4138074642082044\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.005391719751060009\n",
+      "Batch atual: 500, Batch_Loss: 0.009345400147140026\n",
+      "\n",
+      "Iter #36 Loss: 0.00827345763938371, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4192\n",
+      "RMSE: 1.1913\n",
+      "Evaluation Loss: 1.4141709694740279\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.008650644682347775\n",
+      "Batch atual: 500, Batch_Loss: 0.005450515542179346\n",
+      "\n",
+      "Iter #37 Loss: 0.008058634760766095, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4253\n",
+      "RMSE: 1.1939\n",
+      "Evaluation Loss: 1.420232501007151\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.0056621539406478405\n",
+      "Batch atual: 500, Batch_Loss: 0.010032681748270988\n",
+      "\n",
+      "Iter #38 Loss: 0.007908834120342169, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4190\n",
+      "RMSE: 1.1912\n",
+      "Evaluation Loss: 1.4140124258214604\n",
+      "\n",
+      "Batch atual: 250, Batch_Loss: 0.00918156560510397\n",
+      "Batch atual: 500, Batch_Loss: 0.008260553702712059\n",
+      "\n",
+      "Iter #39 Loss: 0.007791103600819155, LearningRate: 5e-05\n",
+      "\n",
+      "\n",
+      "Evaluating...\n",
+      "MSE: 1.4218\n",
+      "RMSE: 1.1924\n",
+      "Evaluation Loss: 1.4167356502630157\n",
+      "\n",
+      "Early stopping activated in epoch 40.\n"
+     ]
+    }
+   ],
+   "source": [
+    "from sklearn.metrics import mean_squared_error, r2_score\n",
+    "\n",
+    "\n",
+    "#i dont want this code to run right now # -> to force error\n",
+    "\n",
+    "num_epochs = 128\n",
+    "use_cuda = torch.cuda.is_available()\n",
+    "device = torch.device(\"cuda\" if use_cuda else \"cpu\")\n",
+    "\n",
+    "print('Model Architecture\\n')\n",
+    "\n",
+    "print(\"Is running on GPU:\", use_cuda)\n",
+    "\n",
+    "model = NeuMF(n_users, n_items,n_genders,n_authors, device, n_factors=16)\n",
+    "\n",
+    "model.to(device)\n",
+    "\n",
+    "print(model, '\\n')\n",
+    "\n",
+    "#for name, param in model.named_parameters():\n",
+    "#    if param.requires_grad:\n",
+    "#        print(name, param.data)\n",
+    "\n",
+    "loss_fn = nn.MSELoss()\n",
+    "\n",
+    "optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-5)\n",
+    "\n",
+    "# Early Stopping Parameters\n",
+    "patience = 10          # Quantas épocas esperar por melhora\n",
+    "min_delta = 0.001     # Mudança mínima para ser considerada melhoria\n",
+    "best_val_loss = float('inf')\n",
+    "epochs_no_improve = 0\n",
+    "early_stop = False\n",
+    "\n",
+    "# Assuming optimizer uses lr = 0.05 for all groups\n",
+    "# lr = 0.05     if epoch < 30\n",
+    "# lr = 0.005    if 30 <= epoch < 60\n",
+    "# lr = 0.0005   if 60 <= epoch < 90\n",
+    "# ...\n",
+    "scheduler = StepLR(optimizer, step_size=30, gamma=0.1)\n",
+    "\n",
+    "for it in range(num_epochs):\n",
+    "    model.train()\n",
+    "    number_batch = 0\n",
+    "    losses = []\n",
+    "    y_true = []\n",
+    "    y_pred = []\n",
+    "    for X, y in trainloader:\n",
+    "        X, y = X.to(device), y.to(device)\n",
+    "        optimizer.zero_grad()\n",
+    "        outputs = model(X)\n",
+    "        loss = loss_fn(outputs.squeeze(), y.type(torch.float32))\n",
+    "        losses.append(loss.item())\n",
+    "        loss.backward()\n",
+    "        optimizer.step()\n",
+    "\n",
+    "        number_batch += 1\n",
+    "\n",
+    "        if number_batch % 250 == 0:\n",
+    "            \n",
+    "            print(f'Batch atual: {number_batch}, Batch_Loss: {loss.item()}')\n",
+    "    \n",
+    "    print(f'\\nIter #{it}', f'Loss: {sum(losses)/len(losses)}, LearningRate: {optimizer.param_groups[0][\"lr\"]}\\n')\n",
+    "    print(f'\\nEvaluating...')\n",
+    "\n",
+    "    model.eval()\n",
+    "    val_loss = 0.0\n",
+    "\n",
+    "    for X, y in evalloader:\n",
+    "        X, y = X.to(device), y.to(device)\n",
+    "        with torch.no_grad():\n",
+    "            outputs = model(X)\n",
+    "            eval_loss = loss_fn(outputs.squeeze(), y.type(torch.float32))\n",
+    "            val_loss += eval_loss.item() * X.size(0)\n",
+    "\n",
+    "\n",
+    "            y_pred.append(outputs.squeeze().cpu().numpy())\n",
+    "\n",
+    "            y_true.append(y.cpu().numpy())\n",
+    "    val_loss /= len(evalloader.dataset) \n",
+    "\n",
+    "\n",
+    "    mse = mean_squared_error(y_true, y_pred)\n",
+    "\n",
+    "    rmse = np.sqrt(mse)\n",
+    "    print(f\"MSE: {mse:.4f}\")\n",
+    "    print(f\"RMSE: {rmse:.4f}\")\n",
+    "    print(f'Evaluation Loss: {val_loss}\\n')\n",
+    "\n",
+    "    \n",
+    "    # Early Stopping\n",
+    "    if it >= 15:\n",
+    "        if val_loss < best_val_loss - min_delta:\n",
+    "            best_val_loss = val_loss\n",
+    "            epochs_no_improve = 0\n",
+    "    \n",
+    "            torch.save(model.state_dict(), f'best_model.pth')\n",
+    "            print(f'    --> New best eval loss: {best_val_loss:.4f}. Model saved.')\n",
+    "        else:\n",
+    "            epochs_no_improve += 1\n",
+    "            if epochs_no_improve >= patience:\n",
+    "                print(f'Early stopping activated in epoch {it+1}.')\n",
+    "                early_stop = True\n",
+    "                break\n",
+    "\n",
+    "    if early_stop:\n",
+    "        break\n",
+    "    scheduler.step()\n",
+    "    \n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "83b7c967",
+   "metadata": {
+    "papermill": {
+     "duration": 0.013813,
+     "end_time": "2025-07-04T21:53:15.435575",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:15.421762",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Evaluation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "id": "c3ba0c92",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:53:15.464439Z",
+     "iopub.status.busy": "2025-07-04T21:53:15.463914Z",
+     "iopub.status.idle": "2025-07-04T21:53:16.231538Z",
+     "shell.execute_reply": "2025-07-04T21:53:16.230736Z"
+    },
+    "papermill": {
+     "duration": 0.783199,
+     "end_time": "2025-07-04T21:53:16.232818",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:15.449619",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<All keys matched successfully>"
+      ]
+     },
+     "execution_count": 32,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Loading our model from save state\n",
+    "\n",
+    "model = NeuMF(n_users, n_items,n_genders,n_authors, device, n_factors=16)\n",
+    "\n",
+    "model.to(device)\n",
+    "\n",
+    "model.load_state_dict(torch.load(\"best_model.pth\", weights_only=True))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b0406049",
+   "metadata": {
+    "papermill": {
+     "duration": 0.013846,
+     "end_time": "2025-07-04T21:53:16.261870",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:16.248024",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### Predictive Metrics"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "id": "41685aab",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:53:16.290793Z",
+     "iopub.status.busy": "2025-07-04T21:53:16.290160Z",
+     "iopub.status.idle": "2025-07-04T21:53:20.820962Z",
+     "shell.execute_reply": "2025-07-04T21:53:20.820146Z"
+    },
+    "papermill": {
+     "duration": 4.546586,
+     "end_time": "2025-07-04T21:53:20.822229",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:16.275643",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "R2: -0.0315\n",
+      "MSE: 1.4306\n",
+      "RMSE: 1.1961\n",
+      "Evaluation Loss: 1.4375979105343142\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "from sklearn.metrics import mean_squared_error, r2_score\n",
+    "\n",
+    "\n",
+    "model.eval()\n",
+    "val_loss = 0.0\n",
+    "y_true = []\n",
+    "y_pred = []\n",
+    "\n",
+    "for X, y in testloader:\n",
+    "    X, y = X.to(device), y.to(device)\n",
+    "    with torch.no_grad():\n",
+    "        outputs = model(X)\n",
+    "        eval_loss = loss_fn(outputs.squeeze(), y.type(torch.float32))\n",
+    "        val_loss += eval_loss.item() * X.size(0)\n",
+    "\n",
+    "\n",
+    "        y_pred.append(outputs.squeeze().cpu().numpy())\n",
+    "\n",
+    "        y_true.append(y.cpu().numpy())\n",
+    "val_loss /= len(evalloader.dataset) \n",
+    "\n",
+    "\n",
+    "mse = mean_squared_error(y_true, y_pred)\n",
+    "\n",
+    "rmse = np.sqrt(mse)\n",
+    "r2 = r2_score(y_true,y_pred)\n",
+    "print(f\"R2: {r2:.4f}\")\n",
+    "print(f\"MSE: {mse:.4f}\")\n",
+    "print(f\"RMSE: {rmse:.4f}\")\n",
+    "print(f'Evaluation Loss: {val_loss}\\n')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "1cbab973",
+   "metadata": {
+    "papermill": {
+     "duration": 0.014701,
+     "end_time": "2025-07-04T21:53:20.851881",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:20.837180",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### Recommendation Metrics"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "id": "de14eb91",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:53:20.880772Z",
+     "iopub.status.busy": "2025-07-04T21:53:20.880101Z",
+     "iopub.status.idle": "2025-07-04T21:53:20.887608Z",
+     "shell.execute_reply": "2025-07-04T21:53:20.886882Z"
+    },
+    "papermill": {
+     "duration": 0.023089,
+     "end_time": "2025-07-04T21:53:20.888667",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:20.865578",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "from collections import defaultdict\n",
+    "\n",
+    "def evaluate_batch_precision_recall(df, model, k=10, threshold=4, device=\"cpu\"):\n",
+    "    model.eval()\n",
+    "    user_item_scores = defaultdict(list)\n",
+    "\n",
+    "    with torch.no_grad():\n",
+    "        for X, y in df:\n",
+    "            item_ids = X[:, 0].to(device)\n",
+    "            user_ids = X[:, 1].to(device)\n",
+    "            scores_real = y.to(device)\n",
+    "\n",
+    "            scores_pred = model(X).squeeze()\n",
+    "\n",
+    "            for uid, iid, pred, real in zip(user_ids, item_ids, scores_pred, scores_real):\n",
+    "                user_item_scores[uid.item()].append((iid.item(), pred.item(), real.item()))\n",
+    "\n",
+    "    precisions, recalls = [], []\n",
+    "\n",
+    "    for uid, interactions in user_item_scores.items():\n",
+    "        # Ordena por score predito (desc)\n",
+    "        topk = sorted(interactions, key=lambda x: x[1], reverse=True)[:k]\n",
+    "        topk_items = {i[0] for i in topk}\n",
+    "        relevant_items = {i[0] for i in interactions if i[2] >= threshold}\n",
+    "\n",
+    "        if not relevant_items:\n",
+    "            continue\n",
+    "\n",
+    "        hits = topk_items & relevant_items\n",
+    "        precisions.append(len(hits) / k)\n",
+    "        recalls.append(len(hits) / len(relevant_items))\n",
+    "\n",
+    "    avg_precision = sum(precisions) / len(precisions) if precisions else 0.0\n",
+    "    avg_recall = sum(recalls) / len(recalls) if recalls else 0.0\n",
+    "    f_score = (\n",
+    "        2 * avg_precision * avg_recall / (avg_precision + avg_recall)\n",
+    "        if avg_precision + avg_recall > 0\n",
+    "        else 0.0\n",
+    "    )\n",
+    "\n",
+    "    return avg_precision, avg_recall, f_score, user_item_scores\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "id": "dc36e26f",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:53:20.917232Z",
+     "iopub.status.busy": "2025-07-04T21:53:20.916821Z",
+     "iopub.status.idle": "2025-07-04T21:53:36.444190Z",
+     "shell.execute_reply": "2025-07-04T21:53:36.443453Z"
+    },
+    "papermill": {
+     "duration": 15.542791,
+     "end_time": "2025-07-04T21:53:36.445383",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:20.902592",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Precision@10: 18.2293%\n",
+      "Recall@10: 98.7676%\n",
+      "F-Score@10: 30.778012%\n"
+     ]
+    }
+   ],
+   "source": [
+    "\n",
+    "k = 10\n",
+    "\n",
+    "precision, recall, f_score, item_r = evaluate_batch_precision_recall(testloader, model, k=k, threshold=4, device=\"cpu\")\n",
+    "print(f\"Precision@{k}: {precision * 100:.4f}%\")\n",
+    "print(f\"Recall@{k}: {recall * 100:.4f}%\")\n",
+    "print(f'F-Score@{k}: {f_score * 100:4f}%')\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "id": "de8c37c7",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-07-04T21:53:36.474582Z",
+     "iopub.status.busy": "2025-07-04T21:53:36.474359Z",
+     "iopub.status.idle": "2025-07-04T21:53:36.479819Z",
+     "shell.execute_reply": "2025-07-04T21:53:36.478972Z"
+    },
+    "papermill": {
+     "duration": 0.021008,
+     "end_time": "2025-07-04T21:53:36.480941",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:36.459933",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "User 119378:\n",
+      " Book Q is for Quarry: A Kinsey Millhone Mystery - Pred: 2.960 | Real: 3.000\n",
+      " Book The Fox, The Captain's Doll, The Ladybird (The Cambridge Edition of the Works of D. H. Lawrence) - Pred: 4.058 | Real: 5.000\n",
+      " Book The Count Of Monte Cristo, Abridged - Pred: 4.383 | Real: 5.000\n",
+      " Book A study of North Atlantic ventilation using transient tracers (WHOI-91-27) - Pred: 4.155 | Real: 4.000\n",
+      " Book Cat Among the Pigeons - Pred: 3.746 | Real: 5.000\n",
+      " Book Emma (The World's Classics) - Pred: 3.717 | Real: 5.000\n",
+      " Book The Pursuit of the Well-Beloved and The Well-Beloved (Penguin Classics) - Pred: 3.613 | Real: 3.000\n",
+      " Book The Great Divorce - Pred: 4.302 | Real: 5.000\n",
+      " Book Wuthering Heights - Pred: 3.273 | Real: 5.000\n",
+      " Book Silas Marner (The Classic Collection) - Pred: 3.478 | Real: 5.000\n",
+      "User 16546:\n",
+      " Book Virgin Land: The American West as Symbol and Myth - Pred: 3.659 | Real: 5.000\n",
+      " Book Feudal Society: Social Classes and Political Organization, Volume II: Vol 2 - Pred: 4.516 | Real: 4.000\n",
+      " Book The Making of the Middle Ages - Pred: 3.930 | Real: 5.000\n",
+      " Book The making of the Middle Ages - Pred: 3.881 | Real: 5.000\n",
+      " Book Cranford, - Pred: 3.961 | Real: 4.000\n",
+      " Book The Big Rock Candy Mountain (Armed Services edition) - Pred: 4.612 | Real: 4.000\n",
+      " Book Mary Barton: A Tale of Manchester Life - Pred: 3.913 | Real: 4.000\n",
+      " Book The Big Rock Candy Mountain - Pred: 4.626 | Real: 4.000\n",
+      " Book Dynamite: The story of class violence in America - Pred: 3.907 | Real: 4.000\n",
+      " Book White-Jacket: Or, The World in a Man-of-War (Worlds Classics) - Pred: 4.435 | Real: 3.000\n",
+      "User 202486:\n",
+      " Book About a Boy - Pred: 4.071 | Real: 4.000\n",
+      " Book Riotous Assembly - Pred: 3.721 | Real: 3.000\n",
+      " Book Kung Fu High School - Pred: 3.996 | Real: 3.000\n",
+      " Book Sharpe's Regiment: Richard Sharpe & the Invasion of France, June to November 1813 (Richard Sharpe's Adventure Series #17) - Pred: 3.799 | Real: 4.000\n",
+      " Book Dune - Pred: 4.013 | Real: 3.000\n",
+      " Book Disco Biscuits - Pred: 3.800 | Real: 3.000\n",
+      " Book The doomed oasis - Pred: 3.771 | Real: 2.000\n",
+      " Book Devil in a Blue Dress (Easy Rawlins Mysteries) - Pred: 3.944 | Real: 3.000\n",
+      " Book No Comebacks - Pred: 4.425 | Real: 4.000\n",
+      " Book Down and out in Paris and London, - Pred: 4.211 | Real: 4.000\n",
+      "User 137694:\n",
+      " Book Heart of Darkness and the Secret Sharer - Pred: 4.103 | Real: 4.000\n",
+      " Book C.S. Lewis letters to children - Pred: 4.409 | Real: 4.000\n",
+      " Book The Allegory of Love: A Study in Medieval Tradition - Pred: 3.397 | Real: 5.000\n",
+      " Book The Lion, the Witch and the Wardrobe: A Story for Children - Pred: 4.125 | Real: 5.000\n",
+      " Book The Four Loves - Pred: 4.351 | Real: 5.000\n",
+      " Book The Martian Chronicles - Pred: 4.098 | Real: 5.000\n",
+      " Book The Allegory of Love: A Study in Medieval Tradition - Pred: 3.376 | Real: 5.000\n",
+      " Book Anne Frank the Diary of a Young Girl - Pred: 4.486 | Real: 5.000\n",
+      " Book Miracles, a preliminary study - Pred: 4.250 | Real: 5.000\n",
+      " Book The Lion, the Witch and the Wardrobe Movie Tie-in Edition (The Chronicles of Narnia) - Pred: 4.093 | Real: 5.000\n",
+      "User 304407:\n",
+      " Book The Crock of Gold - Pred: 3.876 | Real: 2.000\n",
+      " Book The Crock of Gold - Pred: 4.036 | Real: 2.000\n",
+      " Book The Crock of Gold - Pred: 3.971 | Real: 2.000\n",
+      " Book The Crock of Gold - Pred: 3.918 | Real: 2.000\n",
+      " Book The Crock of Gold - Pred: 3.925 | Real: 2.000\n",
+      "User 930871:\n",
+      " Book Setting Up Your Scenes: The Inner Workings of Great Films - Pred: 3.793 | Real: 1.000\n",
+      "User 350347:\n",
+      " Book Good News a Novel 1ST Edition Inscribed - Pred: 4.021 | Real: 4.000\n",
+      " Book Ishi's Brain: In Search of America's Last \"Wild\" Indian - Pred: 4.313 | Real: 5.000\n",
+      " Book The Media Monopoly - Pred: 4.075 | Real: 4.000\n",
+      " Book Foundation - Pred: 3.906 | Real: 4.000\n",
+      " Book The Martian Way - Pred: 3.902 | Real: 5.000\n",
+      " Book Power to the People : How the Coming Energy Revolution Will Transform an Industry, Change Our Lives, and Maybe Even Save the Planet - Pred: 3.639 | Real: 3.000\n",
+      " Book The Captive Mind - Pred: 4.338 | Real: 5.000\n",
+      " Book A Way Home - Pred: 4.205 | Real: 5.000\n",
+      " Book Lord of Light (Avon N187) - Pred: 4.316 | Real: 3.000\n",
+      " Book Public Opinion - Pred: 4.252 | Real: 5.000\n",
+      "User 69274:\n",
+      " Book Into the Night (Troubleshooter) - Pred: 3.846 | Real: 2.000\n",
+      " Book Breaking Point (Troubleshooters, Book 9) - Pred: 3.398 | Real: 3.000\n",
+      " Book Hot Spell - Pred: 4.125 | Real: 4.000\n",
+      " Book Breaking Point (Troubleshooters, Book 9) - Pred: 3.330 | Real: 3.000\n",
+      " Book Breaking Point (Troubleshooters, Book 9) - Pred: 3.394 | Real: 3.000\n",
+      " Book Hot Target (Troubleshooters, Book 8) - Pred: 3.606 | Real: 4.000\n",
+      " Book Hot Target (Troubleshooters, Book 8) - Pred: 3.611 | Real: 4.000\n",
+      " Book A Taste of Heaven - Pred: 4.268 | Real: 3.000\n",
+      "User 205641:\n",
+      " Book Moby-Dick or The Whale - Pred: 3.849 | Real: 5.000\n",
+      " Book The Emporor's New Mind: Concerning Computers, Minds, and the Laws of Physics. - Pred: 4.008 | Real: 2.000\n",
+      " Book The Borderlands of Science: Where Sense Meets Nonsense - Pred: 3.428 | Real: 2.000\n",
+      " Book Synergetics: Explorations in the geometry of thinking - Pred: 4.661 | Real: 3.000\n",
+      " Book What Computers Still Can't Do: A Critique of Artificial Reason - Pred: 3.972 | Real: 5.000\n",
+      " Book The Unpleasant Profession of Jonathan Hoag - Pred: 3.996 | Real: 5.000\n",
+      " Book Stranger to the ground - Pred: 4.098 | Real: 5.000\n",
+      " Book Zephyr: Tracking a Dream Across America - Pred: 3.846 | Real: 4.000\n",
+      " Book STRANGER IN A STRANGE LAND - Pred: 3.696 | Real: 4.000\n",
+      " Book Moby Dick;: Or, The white whale (A Signet classic) - Pred: 3.833 | Real: 5.000\n",
+      "User 492071:\n",
+      " Book Spindrift Spray From a Psychic Sea - Pred: 3.039 | Real: 4.000\n",
+      " Book Up in the Old Hotel - Pred: 4.546 | Real: 5.000\n",
+      "User 1008827:\n",
+      " Book My Life So Far - Pred: 3.491 | Real: 5.000\n",
+      " Book A Lotus Grows in the Mud - Pred: 3.818 | Real: 5.000\n",
+      " Book In the Kennedy Style: Magical Evenings in the Kennedy White House - Pred: 4.411 | Real: 5.000\n",
+      " Book Brag! The Art of Tooting Your Own Horn Without Blowing It - Pred: 3.438 | Real: 5.000\n",
+      " Book 1001 Ways to Market Your Books: For Authors and Publishers (Book Marketing Series) - Pred: 4.572 | Real: 5.000\n",
+      " Book The Five Love Languages: The Secret to Love that Lasts - Pred: 4.456 | Real: 5.000\n",
+      " Book Reaching to Heaven - Pred: 4.799 | Real: 5.000\n",
+      " Book Five People You Meet in Heaven - Pred: 3.914 | Real: 5.000\n",
+      " Book Bend in the Road - Pred: 3.803 | Real: 5.000\n",
+      " Book A Bend in the Road - Pred: 3.912 | Real: 5.000\n",
+      "User 778490:\n",
+      " Book Substance & Style: Instruction and Practice in Copyediting - Pred: 4.008 | Real: 5.000\n",
+      " Book Bleak House - Pred: 4.208 | Real: 5.000\n",
+      " Book Bleak House (Penguin English Library) - Pred: 4.203 | Real: 5.000\n",
+      " Book Bleak House (Bantam Classics (Turtleback)) - Pred: 4.196 | Real: 5.000\n",
+      " Book Bleak House - Pred: 4.218 | Real: 5.000\n",
+      "User 556180:\n",
+      " Book The Best Christmas pageant ever - Pred: 4.379 | Real: 5.000\n",
+      " Book Close Encounters of a Third World Kind - Pred: 4.512 | Real: 5.000\n",
+      " Book The Best Christmas Pageant Ever - Pred: 4.338 | Real: 5.000\n",
+      " Book Once Upon a Cool Motorcycle Dude - Pred: 4.588 | Real: 5.000\n",
+      " Book A Kick in the Head: An Everyday Guide to Poetic Forms - Pred: 3.988 | Real: 5.000\n",
+      " Book The Braid - Pred: 4.377 | Real: 5.000\n",
+      " Book Ready or Not, Dawdle Duckling - Pred: 4.493 | Real: 5.000\n",
+      " Book The Great Fuzz Frenzy - Pred: 4.042 | Real: 5.000\n",
+      " Book Cracker Jackson - Pred: 3.970 | Real: 5.000\n",
+      " Book Winners Never Quit! - Pred: 4.625 | Real: 4.000\n",
+      "User 964501:\n",
+      " Book 10 Days to Faster Reading - Pred: 4.024 | Real: 1.000\n",
+      "User 639032:\n",
+      " Book Pet Sitting for Profit: A Complete Manual for Professional Success (Howell Reference Books) - Pred: 3.680 | Real: 5.000\n",
+      " Book Brand-New Pencils, Brand-New Books (Book and Audio CD) (Paperback) - Pred: 4.584 | Real: 5.000\n",
+      " Book Little women; or, Meg, Jo, Beth, and Amy, - Pred: 4.043 | Real: 5.000\n",
+      " Book Cats Sleep Anywhere - Pred: 4.356 | Real: 5.000\n",
+      " Book Curious George Takes a Train (Curious George 8x8 (Quality)) - Pred: 3.473 | Real: 4.000\n",
+      " Book The Color Kittens (A Little Golden Book) - Pred: 4.713 | Real: 5.000\n",
+      " Book Little Women - Pred: 4.066 | Real: 5.000\n",
+      " Book Little Women (Courage giant classics) - Pred: 4.046 | Real: 5.000\n",
+      " Book Why Do Cats Meow? (Easy-to-Read, Dial) - Pred: 3.789 | Real: 5.000\n",
+      " Book Little women, or, Meg, Jo, Beth and Amy: Parts I and II - Pred: 4.074 | Real: 5.000\n",
+      "User 636528:\n",
+      " Book Looking For Mr. Goodfrog (Red Dress Ink Novels) - Pred: 3.399 | Real: 5.000\n",
+      "User 985137:\n",
+      " Book To kill a mockingbird - Pred: 4.538 | Real: 5.000\n",
+      " Book Silas Marner,: The weaver of Raveloe, (The Academy series of English classics) - Pred: 3.450 | Real: 5.000\n",
+      " Book Tess of the D'Urbervilles - Pred: 3.608 | Real: 4.000\n",
+      " Book To kill a mockingbird - Pred: 4.528 | Real: 5.000\n",
+      " Book Frankenstein - Pred: 3.798 | Real: 5.000\n",
+      " Book Great Expectations - Pred: 3.767 | Real: 5.000\n",
+      " Book Pride and Prejudice - Pred: 4.147 | Real: 4.000\n",
+      " Book Tess of Th D'Urbervilles (Pbk)(Oop) (Bloom's Notes) - Pred: 3.553 | Real: 4.000\n",
+      " Book The Adventures of Huckleberry Finn - Pred: 3.988 | Real: 4.000\n",
+      " Book Great Expectations - Pred: 3.736 | Real: 5.000\n",
+      "User 759873:\n",
+      " Book Read And Think Spanish (Book) - Pred: 3.376 | Real: 3.000\n",
+      " Book The Elements of New Testament Greek - Pred: 3.109 | Real: 3.000\n",
+      " Book Hebrew Picture Word Book - Pred: 2.970 | Real: 3.000\n",
+      " Book The Elements of New Testament Greek - Pred: 3.162 | Real: 3.000\n",
+      " Book Colloquial Icelandic: The Complete Course for Beginners (Colloquial Series) - Pred: 3.829 | Real: 2.000\n",
+      "User 323431:\n",
+      " Book Healing Trauma: Guided Imagery for Posttraumatic Stress (Health Journeys) - Pred: 3.845 | Real: 4.000\n",
+      "User 940807:\n",
+      " Book Walden: Or, Life in the Woods - Pred: 3.814 | Real: 4.000\n",
+      " Book Walden - Pred: 3.794 | Real: 4.000\n",
+      " Book Walden : or, Life in the woods - Pred: 3.833 | Real: 4.000\n",
+      " Book Walden - Pred: 3.811 | Real: 4.000\n"
+     ]
+    }
+   ],
+   "source": [
+    "for i, (uid, items) in enumerate(item_r.items()):\n",
+    "    if i >= 20:\n",
+    "        break\n",
+    "    print(f\"User {uid}:\")\n",
+    "    for iid, pred, real in items[:10]:  \n",
+    "        book = book_dict[iid]\n",
+    "        print(f\" Book {book} - Pred: {pred:.3f} | Real: {real:.3f}\")\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "830eb037",
+   "metadata": {
+    "papermill": {
+     "duration": 0.014042,
+     "end_time": "2025-07-04T21:53:36.509220",
+     "exception": false,
+     "start_time": "2025-07-04T21:53:36.495178",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "nvidiaTeslaT4",
+   "dataSources": [
+    {
+     "datasetId": 2476732,
+     "sourceId": 4200454,
+     "sourceType": "datasetVersion"
+    }
+   ],
+   "dockerImageVersionId": 31040,
+   "isGpuEnabled": true,
+   "isInternetEnabled": true,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.11"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 976.76716,
+   "end_time": "2025-07-04T21:53:40.240248",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2025-07-04T21:37:23.473088",
+   "version": "2.6.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
