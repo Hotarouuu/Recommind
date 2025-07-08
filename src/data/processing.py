@@ -11,47 +11,6 @@ import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 
-
-def processing(df_merged):
-
-    # 1. Ordinal Encoder
-    encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-    encoded = encoder.fit_transform(df_merged.select(['User_id', 'Id']).to_numpy())
-
-    df_encoded = df_merged.with_columns([
-        pl.Series(name='User_id', values=encoded[:, 0].astype(int)),
-        pl.Series(name='Id', values=encoded[:, 1].astype(int)),
-    ])
-
-    df_encoded = df_encoded.filter(
-        (pl.col('User_id') != -1) & (pl.col('Id') != -1)
-    )
-
-    n_users = df_encoded.select(pl.col('User_id').max()).item() + 1
-    n_items = df_encoded.select(pl.col('Id').max()).item() + 1
-
-    print(f"n_users = {n_users}, n_items = {n_items}")
-
-    # 2. LabelEncoder
-
-
-    authors = df_encoded["authors"].to_numpy()
-    categories = df_encoded["categories"].to_numpy()
-
-    enc_authors = LabelEncoder()
-    enc_categories = LabelEncoder()
-
-    authors_encoded = enc_authors.fit_transform(authors)
-    categories_encoded = enc_categories.fit_transform(categories)
-
-    # Se quiser colocar de volta no DataFrame
-    df_encoded = df_encoded.with_columns([
-        pl.Series("authors", authors_encoded),
-        pl.Series("categories", categories_encoded)
-    ])
-
-    return df_encoded, n_users, n_items
-
 class Loader(Dataset):
     def __init__(self, df):
         super().__init__()
@@ -76,40 +35,85 @@ class Loader(Dataset):
     def __len__(self):
         # Total number of samples
         return len(self.ratings)
+
+class Encoder:
+    def __init__(self, df):
+        self.df = df
+        self.ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+        self.authors_encoder = LabelEncoder()
+        self.gender_encoder = LabelEncoder()
+    def id_encoder(self):
+        encoded = self.ordinal_encoder.fit_transform(self.df.select(['User_id', 'Id']).to_numpy())
+        self.df = self.df.with_columns([
+            pl.Series('User_id', encoded[:, 0].astype(int)),
+            pl.Series('Id', encoded[:, 1].astype(int))
+        ])
+        self.df = self.df.filter((pl.col('User_id') != -1) & (pl.col('Id') != -1))
+    def info_encoder(self):
+        authors_encoded = self.authors_encoder.fit_transform(self.df['authors'].to_numpy())
+        categories_encoded = self.gender_encoder.fit_transform(self.df['categories'].to_numpy())
+        self.df = self.df.with_columns([
+            pl.Series('authors', authors_encoded),
+            pl.Series('categories', categories_encoded)
+        ])
+    def transforms(self):
+        self.id_encoder()
+        self.info_encoder()
+
+        return self.df, self.ordinal_encoder, self.authors_encoder, self.gender_encoder
+
+
+class Processor():
+    def __init__(self, df_merged):
+        self.df_merged = df_merged
+        self.n_users = 0
+        self.n_items = 0
+        self.n_authors = 0 
+        self.n_genders = 0
+
+    def encoding(self):
     
-def data_loader(df):
+        encoder = Encoder(self.df_merged)
+        self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder = encoder.transforms()
+        self.n_users = self.df_merged.select(pl.col('User_id').max()).item() + 1
+        self.n_items = self.df_merged.select(pl.col('Id').max()).item() + 1
+        self.n_genders = len(self.df_merged['categories'].unique())
+        self.n_authors = len(self.df_merged['authors'].unique())
+        return self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder
 
-    df_encoded, n_users, n_items = processing(df)
+    def data_loader(self):
 
-    n_genders = len(df_encoded['categories'].unique())
-    n_authors = len(df_encoded['authors'].unique())
+        user_score = self.df_merged.groupby("User_id")["review/score"].median().reset_index()
 
-    user_score = df_encoded.groupby("User_id")["review/score"].median().reset_index()
+        train_users, temp_users = train_test_split(
+            user_score,
+            test_size=0.4,
+            stratify=user_score["review/score"],
+            random_state=42
+        )
 
-    train_users, temp_users = train_test_split(
-        user_score,
-        test_size=0.4,
-        stratify=user_score["review/score"],
-        random_state=42
-    )
+        val_users, test_users = train_test_split(
+            temp_users,
+            test_size=0.5,
+            stratify=temp_users["review/score"],
+            random_state=42
+        )
 
-    val_users, test_users = train_test_split(
-        temp_users,
-        test_size=0.5,
-        stratify=temp_users["review/score"],
-        random_state=42
-    )
+        df_train = self.df_merged[self.df_merged["User_id"].isin(train_users["User_id"])]
+        df_val = self.df_merged[self.df_merged["User_id"].isin(val_users["User_id"])]
+        df_test = self.df_merged[self.df_merged["User_id"].isin(test_users["User_id"])]
 
-    df_train = df_encoded[df_encoded["User_id"].isin(train_users["User_id"])]
-    df_val = df_encoded[df_encoded["User_id"].isin(val_users["User_id"])]
-    df_test = df_encoded[df_encoded["User_id"].isin(test_users["User_id"])]
+        train_dataset = Loader(df_train)
+        test_dataset = Loader(df_test)
+        eval_dataset = Loader(df_val)
 
-    train_dataset = Loader(df_train)
-    test_dataset = Loader(df_test)
-    eval_dataset = Loader(df_val)
+        trainloader = DataLoader(train_dataset, batch_size=2048, shuffle=True, drop_last=True)
+        testloader = DataLoader(test_dataset, batch_size=2048, shuffle=True, drop_last=True)
+        evalloader = DataLoader(eval_dataset, batch_size=2048, shuffle=True, drop_last=True)
 
-    trainloader = DataLoader(train_dataset, batch_size=2048, shuffle=True, drop_last=True)
-    testloader = DataLoader(test_dataset, batch_size=2048, shuffle=True, drop_last=True)
-    evalloader = DataLoader(eval_dataset, batch_size=2048, shuffle=True, drop_last=True)
+        return trainloader, testloader, evalloader, self.n_users, self.n_items, self.n_genders, self.n_authors
 
-    return trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors
+    def run_pipeline(self):
+        self.processing()
+        trainloader, testloader, evalloader = self.data_loader()
+        return trainloader, testloader, evalloader, self.n_users, self.n_items, self.n_genders, self.n_authors

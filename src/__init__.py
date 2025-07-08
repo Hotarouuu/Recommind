@@ -1,4 +1,4 @@
-from .data.processing import data_loader
+from .data.processing import Processor
 from .data.treatment import data_treatment
 from .models.model import NeuMF
 from .trainer import trainer
