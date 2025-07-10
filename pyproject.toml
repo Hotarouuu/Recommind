@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recommind_packages"
+description = "local package"
+version = "0.0.1"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "scikit-learn",
+    "polars",
+    "numpy",
+    "pandas",
+    "pyarrow"
+]
