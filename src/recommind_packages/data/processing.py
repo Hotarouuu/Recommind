@@ -69,6 +69,7 @@ class Encoder:
 
 class Processor:
     def __init__(self, data_path, ratings_path):
+
         self.data_path = data_path
         self.ratings_path = ratings_path
         self.df_merged = None
@@ -81,6 +82,7 @@ class Processor:
         self.gender_encoder = None
 
     def data_treatment(self):
+
         df_data = pl.read_csv(self.data_path)
         df_ratings = pl.read_csv(self.ratings_path)
         df_data = df_data.select(['Title', 'authors', 'categories', 'ratingsCount'])
@@ -101,6 +103,7 @@ class Processor:
         self.df_merged = df_merged
 
     def encode(self, ordinal_encoder=None, authors_encoder=None, gender_encoder=None):
+
         if ordinal_encoder is not None and authors_encoder is not None and gender_encoder is not None:
             self.ordinal_encoder = ordinal_encoder
             self.authors_encoder = authors_encoder
@@ -114,6 +117,7 @@ class Processor:
             self.df_merged = self.df_merged.filter((pl.col('User_id') != -1) & (pl.col('Id') != -1))
 
             authors_encoded = self.authors_encoder.transform(self.df_merged['authors'].to_numpy())
+            
             categories_encoded = self.gender_encoder.transform(self.df_merged['categories'].to_numpy())
             self.df_merged = self.df_merged.with_columns([
                 pl.Series('authors', authors_encoded),
