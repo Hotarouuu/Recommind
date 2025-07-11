@@ -10,6 +10,7 @@ load_dotenv()
 ## Only models
 models_path = os.getenv('models')
 encoding_path = os.path.join(models_path, "encoding_models")
+ncf_path = os.path.join(models_path, "ncf_model")
 
 ## Only the datasets
 
@@ -47,16 +48,19 @@ def main():
         # Training
         print('The training is starting!\n ')
 
-        model = NeuMF(n_users, n_items,n_genders, n_authors, device='cuda', n_factors=16)
+        model = NeuMF(n_users, n_items,n_genders, n_authors, n_factors=16)
 
-        train = trainer(model, 
-                trainloader, 
-                evalloader, 
-                device = 'cuda', 
-                early_stopping = True, 
-                n_factors = 16, 
-                lr = 0.0005, 
-                weight_decay = 1e-5)
+        train = trainer(
+            model,
+            ncf_path,
+            trainloader,
+            evalloader,
+            device='cpu',
+            early_stopping=True,
+            n_factors=16,
+            lr=0.0005,
+            weight_decay=1e-5
+        )
 
         # Evaluation
 

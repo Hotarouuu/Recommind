@@ -24,8 +24,6 @@ class Loader(Dataset):
 
 
         self.X, self.y = torch.tensor(self.X, dtype=torch.long), torch.tensor(self.y)
-        self.X, self.y = self.X.to(device='cuda'), self.y.to(device='cuda') 
-
     
 
     def __getitem__(self, index):

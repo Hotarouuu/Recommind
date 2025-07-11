@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class NeuMF(nn.Module):
-    def __init__(self, n_users, n_items,n_genders, n_authors, device, n_factors=8):
+    def __init__(self, n_users, n_items,n_genders, n_authors, n_factors=8):
         super().__init__()
 
         # Embeddings for GMF (Generalized Matrix Factorization) path
