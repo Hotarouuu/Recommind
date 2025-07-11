@@ -17,6 +17,20 @@ def trainer(model, path, trainloader, evalloader, epochs = 40, device = 'cuda', 
 
     scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
+        # salvar config e pesos
+    config = {
+        'num_users': num_users,
+        'num_items': num_items,
+        'num_genres': num_genres,
+        'num_categories': num_categories,
+        # outros hps
+    }
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'config': config
+    }, 'recommender_checkpoint.pth')
+
+
 
     if early_stopping:
 

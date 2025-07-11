@@ -100,14 +100,32 @@ class Processor:
         )
         self.df_merged = df_merged
 
-    def encode(self):
-        encoder = Encoder(self.df_merged)
-        self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder = encoder.transforms()
+    def encode(self, ordinal_encoder=None, authors_encoder=None, gender_encoder=None):
+        if ordinal_encoder is not None and authors_encoder is not None and gender_encoder is not None:
+            self.ordinal_encoder = ordinal_encoder
+            self.authors_encoder = authors_encoder
+            self.gender_encoder = gender_encoder
+
+            encoded = self.ordinal_encoder.transform(self.df_merged.select(['User_id', 'Id']).to_numpy())
+            self.df_merged = self.df_merged.with_columns([
+                pl.Series('User_id', encoded[:, 0].astype(int)),
+                pl.Series('Id', encoded[:, 1].astype(int))
+            ])
+            self.df_merged = self.df_merged.filter((pl.col('User_id') != -1) & (pl.col('Id') != -1))
+
+            authors_encoded = self.authors_encoder.transform(self.df_merged['authors'].to_numpy())
+            categories_encoded = self.gender_encoder.transform(self.df_merged['categories'].to_numpy())
+            self.df_merged = self.df_merged.with_columns([
+                pl.Series('authors', authors_encoded),
+                pl.Series('categories', categories_encoded)
+            ])
+        else:
+            encoder = Encoder(self.df_merged)
+            self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder = encoder.transforms()
         self.n_users = int(self.df_merged.select(pl.col('User_id').max()).item()) + 1
         self.n_items = int(self.df_merged.select(pl.col('Id').max()).item()) + 1
         self.n_genders = len(self.df_merged['categories'].unique())
         self.n_authors = len(self.df_merged['authors'].unique())
-
         return self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder
 
     def get_loaders(self, batch_size=2048):
@@ -136,8 +154,8 @@ class Processor:
         testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
         return trainloader, testloader, valloader
 
-    def run(self):
+    def run(self, ordinal_encoder=None, authors_encoder=None, gender_encoder=None):
         self.data_treatment()
-        self.encode()
+        self.encode(ordinal_encoder, authors_encoder, gender_encoder)
         trainloader, testloader, valloader = self.get_loaders()
         return trainloader, testloader, valloader, self.n_users, self.n_items, self.n_genders, self.n_authors

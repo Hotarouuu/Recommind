@@ -21,8 +21,7 @@ dataset_books = os.path.join(dataset, "books_data.csv")
 
 
 def main():
-    
-
+  
         # Processing 
 
         proce = Processor(dataset_books, dataset_ratings)
@@ -49,7 +48,7 @@ def main():
         # Training
         print('The training is starting!\n ')
 
-        model = NeuMF(n_users, n_items,n_genders, n_authors, n_factors=16)
+        model = NeuMF(n_users, n_items, n_genders, n_authors, n_factors=16)
 
         train = trainer(
             model,
@@ -63,6 +62,23 @@ def main():
             weight_decay=1e-5
         )
 
+        config = {
+                'num_users': n_users,
+                'num_items': n_items,
+                'num_genders': n_genders,
+                'num_authors': n_authors,
+                'n_factors' : 16
+        }
+        torch.save({
+                'model_state_dict': model.state_dict(),
+                'config': config
+        }, os.path.join(ncf_path, 'recommind_model.pth'))
+
+        '''
+        recommind_model = torch.load(os.path.join(ncf_path, 'recommind_model.pth'))
+        model = NeuMF(**recommind_model['config'])
+        model.load_state_dict(recommind_model['model_state_dict'])
+        '''
         # Evaluation
 
         k = 10
