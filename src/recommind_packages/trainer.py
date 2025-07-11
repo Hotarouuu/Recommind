@@ -11,8 +11,6 @@ def trainer(model, path, trainloader, evalloader, epochs = 40, device = 'cuda', 
 
     model.to(device)
 
-
-
     loss_fn = nn.MSELoss()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-5)

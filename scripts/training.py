@@ -25,7 +25,7 @@ def main():
 
         # Processing 
 
-        proce = Processor(df)
+        proce = Processor(dataset_books, dataset_ratings)
 
         trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
@@ -35,9 +35,9 @@ def main():
 
         print(f'Saving the encoders')
 
-        #joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
-        #joblib.dump(authors_encoder, os.path.join(encoding_path, 'authors_encoder.joblib'))
-        #joblib.dump(gender_encoder, os.path.join(encoding_path, 'gender_encoder.joblib'))
+        joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
+        joblib.dump(authors_encoder, os.path.join(encoding_path, 'authors_encoder.joblib'))
+        joblib.dump(gender_encoder, os.path.join(encoding_path, 'gender_encoder.joblib'))
 
         print('Done!\n')
 
