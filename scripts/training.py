@@ -22,27 +22,28 @@ dataset_books = os.path.join(dataset, "books_data.csv")
 
 def main():
     
-        # Treating data
-
-        df = data_treatment(dataset_books, dataset_ratings)
 
         # Processing 
 
         proce = Processor(df)
 
-        _ ,ordinal_encoder, authors_encoder, gender_encoder = proce.encoding()
+        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
+
+        ordinal_encoder = proce.ordinal_encoder
+        authors_encoder = proce.authors_encoder
+        gender_encoder = proce.gender_encoder
 
         print(f'Saving the encoders')
 
-        joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
-        joblib.dump(authors_encoder, os.path.join(encoding_path, 'authors_encoder.joblib'))
-        joblib.dump(gender_encoder, os.path.join(encoding_path, 'gender_encoder.joblib'))
+        #joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
+        #joblib.dump(authors_encoder, os.path.join(encoding_path, 'authors_encoder.joblib'))
+        #joblib.dump(gender_encoder, os.path.join(encoding_path, 'gender_encoder.joblib'))
 
         print('Done!\n')
 
         # Preparing to the training 
 
-        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run_pipeline()
+        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
 
         # Training

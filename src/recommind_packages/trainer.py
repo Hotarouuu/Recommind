@@ -9,11 +9,8 @@ def trainer(model, path, trainloader, evalloader, epochs = 40, device = 'cuda', 
     num_epochs = epochs
     device = device
 
-    print('Model Architecture\n')
-
     model.to(device)
 
-    print(model, '\n')
 
 
     loss_fn = nn.MSELoss()

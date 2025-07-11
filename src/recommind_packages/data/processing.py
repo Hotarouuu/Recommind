@@ -67,60 +67,77 @@ class Encoder:
 
         return self.df, self.ordinal_encoder, self.authors_encoder, self.gender_encoder
 
+class Processor:
+    def __init__(self, data_path, ratings_path):
+        self.data_path = data_path
+        self.ratings_path = ratings_path
+        self.df_merged = None
+        self.n_users = None
+        self.n_items = None
+        self.n_authors = None
+        self.n_genders = None
+        self.ordinal_encoder = None
+        self.authors_encoder = None
+        self.gender_encoder = None
 
-class Processor():
-    def __init__(self, df_merged):
+    def data_treatment(self):
+        df_data = pl.read_csv(self.data_path)
+        df_ratings = pl.read_csv(self.ratings_path)
+        df_data = df_data.select(['Title', 'authors', 'categories', 'ratingsCount'])
+        df_data = df_data.with_columns(
+            pl.col("ratingsCount").fill_null(0),
+            pl.col("categories").fill_null("No Category")
+        )
+        df_ratings = df_ratings.select(['Id', 'Title', 'User_id', 'review/score']).drop_nulls()
+        df_merged = df_ratings.join(
+            df_data.select(["Title", "authors", "categories", "ratingsCount"]),
+            on='Title',
+            how='left'
+        )
+        df_merged = df_merged.with_columns(
+            pl.col("categories").str.replace_all('[', '', literal=True).str.replace_all(']', '', literal=True),
+            pl.col("authors").str.replace_all('[', '', literal=True).str.replace_all(']', '', literal=True)
+        )
         self.df_merged = df_merged
-        self.n_users = 0
-        self.n_items = 0
-        self.n_authors = 0 
-        self.n_genders = 0
 
-    def encoding(self):
-    
+    def encode(self):
         encoder = Encoder(self.df_merged)
         self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder = encoder.transforms()
-        self.n_users = self.df_merged.select(pl.col('User_id').max()).item() + 1
-        self.n_items = self.df_merged.select(pl.col('Id').max()).item() + 1
+        self.n_users = int(self.df_merged.select(pl.col('User_id').max()).item()) + 1
+        self.n_items = int(self.df_merged.select(pl.col('Id').max()).item()) + 1
         self.n_genders = len(self.df_merged['categories'].unique())
         self.n_authors = len(self.df_merged['authors'].unique())
+
         return self.df_merged, self.ordinal_encoder, self.authors_encoder, self.gender_encoder
 
-    def data_loader(self):
-
-        self.df_merged = self.df_merged.to_pandas()
-
-        user_score = self.df_merged.groupby("User_id")["review/score"].median().reset_index()
-
+    def get_loaders(self, batch_size=2048):
+        df = self.df_merged.to_pandas()
+        user_score = df.groupby("User_id")["review/score"].median().reset_index()
         train_users, temp_users = train_test_split(
             user_score,
             test_size=0.4,
             stratify=user_score["review/score"],
             random_state=42
         )
-
         val_users, test_users = train_test_split(
             temp_users,
             test_size=0.5,
             stratify=temp_users["review/score"],
             random_state=42
         )
-
-        df_train = self.df_merged[self.df_merged["User_id"].isin(train_users["User_id"])]
-        df_val = self.df_merged[self.df_merged["User_id"].isin(val_users["User_id"])]
-        df_test = self.df_merged[self.df_merged["User_id"].isin(test_users["User_id"])]
-
+        df_train = df[df["User_id"].isin(train_users["User_id"])]
+        df_val = df[df["User_id"].isin(val_users["User_id"])]
+        df_test = df[df["User_id"].isin(test_users["User_id"])]
         train_dataset = Loader(df_train)
+        val_dataset = Loader(df_val)
         test_dataset = Loader(df_test)
-        eval_dataset = Loader(df_val)
+        trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        valloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        return trainloader, testloader, valloader
 
-        trainloader = DataLoader(train_dataset, batch_size=2048, shuffle=True, drop_last=True)
-        testloader = DataLoader(test_dataset, batch_size=2048, shuffle=True, drop_last=True)
-        evalloader = DataLoader(eval_dataset, batch_size=2048, shuffle=True, drop_last=True)
-
-        return trainloader, testloader, evalloader, self.n_users, self.n_items, self.n_genders, self.n_authors
-
-    def run_pipeline(self):
-        self.encoding()
-        trainloader, testloader, evalloader, self.n_users, self.n_items, self.n_genders, self.n_authors = self.data_loader()
-        return trainloader, testloader, evalloader, self.n_users, self.n_items, self.n_genders, self.n_authors
+    def run(self):
+        self.data_treatment()
+        self.encode()
+        trainloader, testloader, valloader = self.get_loaders()
+        return trainloader, testloader, valloader, self.n_users, self.n_items, self.n_genders, self.n_authors
