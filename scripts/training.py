@@ -30,14 +30,11 @@ def main():
         trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
         ordinal_encoder = proce.ordinal_encoder
-        authors_encoder = proce.authors_encoder
-        gender_encoder = proce.gender_encoder
+
 
         print(f'Saving the encoders')
 
         joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
-        joblib.dump(authors_encoder, os.path.join(encoding_path, 'authors_encoder.joblib'))
-        joblib.dump(gender_encoder, os.path.join(encoding_path, 'gender_encoder.joblib'))
 
         print('Done!\n')
 
@@ -81,7 +78,7 @@ def main():
 
         k = 10
 
-        avg_precision, avg_recall, f_score, user_item_scores= evaluate_batch_precision_recall(testloader, model, k=k)
+        avg_precision, avg_recall, f_score, user_item_scores= evaluate_batch_precision_recall(testloader, model, k=k, device='cuda')
 
         print(f"Precision@{k}: {avg_precision * 100:.4f}%")
         print(f"Recall@{k}: {avg_recall * 100:.4f}%")

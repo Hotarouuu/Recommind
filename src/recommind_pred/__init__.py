@@ -1,1 +1,1 @@
-from .processing import Processor
+from .processing import Pipeline

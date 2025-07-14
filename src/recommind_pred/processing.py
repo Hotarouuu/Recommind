@@ -54,14 +54,14 @@ class Pipeline:
 
     def encode(self, ordinal_encoder=None):
 
-        if ordinal_encoder is not None and authors_encoder is not None and categories_encoder is not None:
+        if ordinal_encoder is not None:
             self.ordinal_encoder = joblib.load(ordinal_encoder)
 
             categorical_cols = ['User_id', 'Id', 'authors', 'categories']
 
             encoded = self.ordinal_encoder.fit_transform(self.df_merged[categorical_cols].to_numpy())
 
-            for i, col in enumerate(self.categorical_cols):
+            for i, col in enumerate(categorical_cols):
                 self.df_merged = self.df_merged.with_columns([
                     pl.Series(col, encoded[:, i].astype(int))
                 ])
@@ -105,9 +105,9 @@ class Pipeline:
             book = book_dict[book_id]
             print(f" Recommended Book: {book}")
 
-    def run(self, user, ordinal_encoder=None, authors_encoder=None, categories_encoder=None):
+    def run(self, user, ordinal_encoder):
         self.data_treatment()
-        self.encode(ordinal_encoder, authors_encoder, categories_encoder)
+        self.encode(ordinal_encoder)
         result, items_to_predict = self.reco_user(user)
         return result, items_to_predict
 

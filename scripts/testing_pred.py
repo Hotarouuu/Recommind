@@ -1,6 +1,6 @@
 # Not useful. It's just for me to test the model
 
-from recommind_pred import Processor
+from recommind_pred import Pipeline
 from recommind_model import model_config
 import torch
 import os
@@ -18,12 +18,12 @@ dataset_ratings = os.path.join(dataset, "Books_rating.csv")
 dataset_books = os.path.join(dataset, "books_data.csv")
 encoding_path = os.path.join(models_path, "encoding_models")
 
-enc1, enc2, enc3 = os.path.join(encoding_path, "ordinal_encoder.joblib"), os.path.join(encoding_path, "authors_encoder.joblib"), os.path.join(encoding_path, "gender_encoder.joblib")
+enc1 = os.path.join(encoding_path, "ordinal_encoder.joblib")
 
 
-proce = Processor(dataset_books, dataset_ratings)
+proce = Pipeline(dataset_books, dataset_ratings)
 
-result, items_to_predict = proce.run_pipeline(212393, enc1, enc2, enc3)
+result, items_to_predict = proce.run(212393, enc1)
 
 
 book_df = proce.df_merged[['Id', 'Title']]

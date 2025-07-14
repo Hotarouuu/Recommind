@@ -7,9 +7,10 @@ def evaluate_batch_precision_recall(df, model, k=10, threshold=4, device="cpu"):
 
     with torch.no_grad():
         for X, y in df:
-            item_ids = X[:, 0].to(device)
-            user_ids = X[:, 1].to(device)
-            scores_real = y.to(device)
+            X, y = X.to(device), y.to(device)
+            item_ids = X[:, 0]
+            user_ids = X[:, 1]
+            scores_real = y
 
             scores_pred = model(X).squeeze()
 
