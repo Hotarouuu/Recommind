@@ -5,6 +5,7 @@ import torch
 import joblib
 load_dotenv()  
 
+
 # Preparing the paths
 
 ## Only models
@@ -55,7 +56,7 @@ def main():
             ncf_path,
             trainloader,
             evalloader,
-            device='cpu',
+            device='cuda',
             early_stopping=True,
             n_factors=16,
             lr=0.0005,
@@ -63,10 +64,10 @@ def main():
         )
 
         config = {
-                'num_users': n_users,
-                'num_items': n_items,
-                'num_genders': n_genders,
-                'num_authors': n_authors,
+                'n_users': n_users,
+                'n_items': n_items,
+                'n_genders': n_genders,
+                'n_authors': n_authors,
                 'n_factors' : 16
         }
         torch.save({
@@ -74,11 +75,11 @@ def main():
                 'config': config
         }, os.path.join(ncf_path, 'recommind_model.pth'))
 
-        '''
+        
         recommind_model = torch.load(os.path.join(ncf_path, 'recommind_model.pth'))
         model = NeuMF(**recommind_model['config'])
         model.load_state_dict(recommind_model['model_state_dict'])
-        '''
+        
         # Evaluation
 
         k = 10
