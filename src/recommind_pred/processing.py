@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import joblib
 
+# Loader for PyTorch
 
 class PredictDataset(Dataset):
    
@@ -21,46 +22,15 @@ class PredictDataset(Dataset):
     def __getitem__(self, idx):
         return self.X[idx]
 
-class Encoder:
-    def __init__(self, df):
-        self.df = df
-        self.ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-        self.authors_encoder = LabelEncoder()
-        self.categories_encoder = LabelEncoder()
+# Pipeline class for recommendation
+## This class don't predict running only the pipeline for now. You have to run the "run()" and then you can use "pred_user()"
 
-    def id_encoder(self):
-        encoded = self.ordinal_encoder.fit_transform(self.df.select(['User_id', 'Id']).to_numpy())
-        self.df = self.df.with_columns([
-            pl.Series('User_id', encoded[:, 0].astype(int)),
-            pl.Series('Id', encoded[:, 1].astype(int))
-        ])
-        self.df = self.df.filter((pl.col('User_id') != -1) & (pl.col('Id') != -1))
-
-    def info_encoder(self):
-        authors_encoded = self.authors_encoder.fit_transform(self.df['authors'].to_numpy())
-        categories_encoded = self.categories_encoder.fit_transform(self.df['categories'].to_numpy())
-        self.df = self.df.with_columns([
-            pl.Series('authors', authors_encoded),
-            pl.Series('categories', categories_encoded)
-        ])
-
-    def transforms(self):
-        self.id_encoder()
-        self.info_encoder()
-        return self.df, self.ordinal_encoder, self.authors_encoder, self.categories_encoder
-
-class Processor:
+class Pipeline:
     def __init__(self, data_path, ratings_path):
         self.data_path = data_path
         self.ratings_path = ratings_path
         self.df_merged = None
-        self.n_users = None
-        self.n_items = None
-        self.n_authors = None
-        self.n_categories = None
         self.ordinal_encoder = None
-        self.authors_encoder = None
-        self.categories_encoder = None
 
     def data_treatment(self):
         df_data = pl.read_csv(self.data_path)
@@ -82,26 +52,21 @@ class Processor:
         )
         self.df_merged = df_merged
 
-    def encode(self, ordinal_encoder=None, authors_encoder=None, categories_encoder=None):
+    def encode(self, ordinal_encoder=None):
+
         if ordinal_encoder is not None and authors_encoder is not None and categories_encoder is not None:
             self.ordinal_encoder = joblib.load(ordinal_encoder)
-            self.authors_encoder = joblib.load(authors_encoder)
-            self.categories_encoder = joblib.load(categories_encoder)
 
-            encoded = self.ordinal_encoder.transform(self.df_merged.select(['User_id', 'Id']).to_numpy())
-            self.df_merged = self.df_merged.with_columns([
-                pl.Series('User_id', encoded[:, 0].astype(int)),
-                pl.Series('Id', encoded[:, 1].astype(int))
-            ])
+            categorical_cols = ['User_id', 'Id', 'authors', 'categories']
+
+            encoded = self.ordinal_encoder.fit_transform(self.df_merged[categorical_cols].to_numpy())
+
+            for i, col in enumerate(self.categorical_cols):
+                self.df_merged = self.df_merged.with_columns([
+                    pl.Series(col, encoded[:, i].astype(int))
+                ])
             self.df_merged = self.df_merged.filter((pl.col('User_id') != -1) & (pl.col('Id') != -1))
 
-            authors_encoded = self.authors_encoder.transform(self.df_merged['authors'].to_numpy())
-            categories_encoded = self.categories_encoder.transform(self.df_merged['categories'].to_numpy())
-            self.df_merged = self.df_merged.with_columns([
-                pl.Series('authors', authors_encoded),
-                pl.Series('categories', categories_encoded)
-            ])
-  
 
     def reco_user(self, user):
         self.df_merged = self.df_merged.to_pandas()
@@ -140,7 +105,7 @@ class Processor:
             book = book_dict[book_id]
             print(f" Recommended Book: {book}")
 
-    def run_pipeline(self, user, ordinal_encoder=None, authors_encoder=None, categories_encoder=None):
+    def run(self, user, ordinal_encoder=None, authors_encoder=None, categories_encoder=None):
         self.data_treatment()
         self.encode(ordinal_encoder, authors_encoder, categories_encoder)
         result, items_to_predict = self.reco_user(user)

@@ -13,5 +13,6 @@ dependencies = [
     "polars",
     "numpy",
     "pandas",
-    "pyarrow"
+    "pyarrow",
+    "joblib"
 ]

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import os
 
 class NeuMF(nn.Module):
     def __init__(self, n_users, n_items,n_genders, n_authors, n_factors=8):
@@ -76,3 +77,10 @@ class NeuMF(nn.Module):
         out = self.final_layer(final_input).squeeze(1)
 
         return out
+
+def model_config(model_path, device='cpu'):
+    mconfig = torch.load(os.path.join(model_path, 'recommind_model.pth'), map_location=torch.device(device))
+    model = NeuMF(**mconfig['config'])
+    model.load_state_dict(mconfig['model_state_dict'])
+
+    return model

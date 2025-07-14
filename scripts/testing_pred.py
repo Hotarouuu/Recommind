@@ -1,7 +1,7 @@
 # Not useful. It's just for me to test the model
 
 from recommind_pred import Processor
-from recommind_model import NeuMF
+from recommind_model import model_config
 import torch
 import os
 from dotenv import load_dotenv
@@ -10,11 +10,7 @@ models_path = os.getenv('models')
 
 ncf_path = os.path.join(models_path, "ncf_model")
 
-
-
-recommind_model = torch.load(os.path.join(ncf_path, 'recommind_model.pth'))
-model = NeuMF(**recommind_model['config'])
-model.load_state_dict(recommind_model['model_state_dict'])
+model = model_config(ncf_path, device='cpu')
 
 dataset_path = os.getenv("data_dir") 
 dataset = os.path.join(dataset_path, "processed")

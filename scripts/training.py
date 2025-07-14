@@ -69,16 +69,13 @@ def main():
                 'n_genders': n_genders,
                 'n_authors': n_authors,
                 'n_factors' : 16
+
         }
         torch.save({
                 'model_state_dict': model.state_dict(),
                 'config': config
         }, os.path.join(ncf_path, 'recommind_model.pth'))
 
-        
-        recommind_model = torch.load(os.path.join(ncf_path, 'recommind_model.pth'))
-        model = NeuMF(**recommind_model['config'])
-        model.load_state_dict(recommind_model['model_state_dict'])
         
         # Evaluation
 
