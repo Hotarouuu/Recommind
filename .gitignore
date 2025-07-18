@@ -91,3 +91,7 @@ target/
 # Virtual Env
 
 venv/
+
+# Duckdb file
+
+notebooks/proto.Duckdb

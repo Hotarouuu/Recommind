@@ -58,6 +58,7 @@ class Processor:
         self.n_authors = None
         self.n_genders = None
         self.ordinal_encoder = None
+
     def data_treatment(self):
         df_data = pl.read_csv(self.data_path)
         df_ratings = pl.read_csv(self.ratings_path)
@@ -77,6 +78,7 @@ class Processor:
             pl.col("authors").str.replace_all('[', '', literal=True).str.replace_all(']', '', literal=True)
         )
         self.df_merged = df_merged
+        
     def encode(self):
 
         encoder = Encoder(self.df_merged)

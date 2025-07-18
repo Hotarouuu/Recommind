@@ -1,4 +1,5 @@
-from recommind_packages import Processor, NeuMF, trainer, evaluate_batch_precision_recall, data_treatment
+from recommind_train import Processor, trainer, evaluate_batch_precision_recall
+from recommind_model import NeuMF
 from dotenv import load_dotenv
 import os
 import torch
