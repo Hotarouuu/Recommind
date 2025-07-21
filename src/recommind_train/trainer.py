@@ -13,10 +13,18 @@ def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, 
 
     for run in range(total_runs):
 
+        model = type(model)(
+            config['n_users'],
+            config['n_items'],
+            config['n_genders'],
+            config['n_authors'],
+            n_factors=n_factors
+        ) # Overwriting the instance to avoid bias on each run
+        model.to(device)
+
         loss_fn = nn.MSELoss()
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
         scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
-        model.to(device)
 
         
         wandb.init(
