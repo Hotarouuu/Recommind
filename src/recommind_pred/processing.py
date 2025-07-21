@@ -1,7 +1,7 @@
 # Data treatment and processing
 
 import polars as pl
-from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+from sklearn.preprocessing import OrdinalEncoder
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -26,31 +26,26 @@ class PredictDataset(Dataset):
 ## This class don't predict running only the pipeline for now. You have to run the "run()" and then you can use "pred_user()"
 
 class Pipeline:
-    def __init__(self, data_path, ratings_path):
+    def __init__(self, data_path, ratings_path, database):
         self.data_path = data_path
         self.ratings_path = ratings_path
         self.df_merged = None
         self.ordinal_encoder = None
+        self.database = database
 
     def data_treatment(self):
-        df_data = pl.read_csv(self.data_path)
-        df_ratings = pl.read_csv(self.ratings_path)
-        df_data = df_data.select(['Title', 'authors', 'categories', 'ratingsCount'])
-        df_data = df_data.with_columns(
-            pl.col("ratingsCount").fill_null(0),
-            pl.col("categories").fill_null("No Category")
-        )
-        df_ratings = df_ratings.select(['Id', 'Title', 'User_id', 'review/score']).drop_nulls()
-        df_merged = df_ratings.join(
-            df_data,
-            on='Title',
-            how='left'
-        )
-        df_merged = df_merged.with_columns(
-            pl.col("categories").str.replace_all('[', '', literal=True).str.replace_all(']', '', literal=True),
-            pl.col("authors").str.replace_all('[', '', literal=True).str.replace_all(']', '', literal=True)
-        )
-        self.df_merged = df_merged
+        query = """SELECT 
+            b.Title, 
+            b.authors, 
+            b.categories, 
+            r.Id, 
+            r.User_id, 
+            r."review/score",
+            b.ratingsCount
+        FROM books b
+        JOIN ratings r ON b.Title = r.Title;"""
+
+        self.df_merged = self.database.execute(query).fetchdf()
 
     def encode(self, ordinal_encoder=None):
 
@@ -62,14 +57,11 @@ class Pipeline:
             encoded = self.ordinal_encoder.fit_transform(self.df_merged[categorical_cols].to_numpy())
 
             for i, col in enumerate(categorical_cols):
-                self.df_merged = self.df_merged.with_columns([
-                    pl.Series(col, encoded[:, i].astype(int))
-                ])
-            self.df_merged = self.df_merged.filter((pl.col('User_id') != -1) & (pl.col('Id') != -1))
+                self.df_merged[col] = encoded[:, i].astype(int)
+            self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
 
 
     def reco_user(self, user):
-        self.df_merged = self.df_merged.to_pandas()
         user_dataframe = self.df_merged[self.df_merged['User_id'] == user]
         user_items = user_dataframe['Id']
         all_items = self.df_merged['Id'].unique()

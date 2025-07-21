@@ -8,14 +8,14 @@ description = "local package"
 version = "0.0.2"
 requires-python = ">=3.11"
 dependencies = [
-    "scikit-learn==1.5.0",
-    "polars==0.20.16",
-    "numpy==1.26.4",
-    "pandas==2.2.2",
-    "pyarrow==16.1.0",
+    "scikit-learn",
+    "polars",
+    "numpy",
+    "pandas",
+    "pyarrow",
     "joblib",
-    "dotenv==0.9.9",
-    "torch==2.7.1",
+    "dotenv",
+    "torch",
     "setuptools",
     "setuptools-scm",
     "duckdb"

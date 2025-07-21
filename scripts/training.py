@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import torch
 import joblib
+import duckdb
 load_dotenv()  
 
 
@@ -23,26 +24,29 @@ dataset_books = os.path.join(dataset, "books_data.csv")
 
 
 def main():
+
+        # Importing data
+
+        con = duckdb.connect("proto.duckdb")
   
         # Processing 
 
-        proce = Processor(dataset_books, dataset_ratings)
+        proce = Processor(dataset_books, dataset_ratings, con)
 
         trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
-        ordinal_encoder = proce.ordinal_encoder
+        print(n_users)
+        print(n_items)
+        print(n_genders)
+        print(n_authors)
 
+        ordinal_encoder = proce.ordinal_encoder
 
         print(f'Saving the encoders')
 
         joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
 
         print('Done!\n')
-
-        # Preparing to the training 
-
-        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
-
 
         # Training
         print('The training is starting!\n ')
