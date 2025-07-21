@@ -7,7 +7,7 @@ import os
 import wandb 
 from .evaluator_metrics import evaluate_batch_precision_recall
 
-def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, total_runs=10, epochs = 40, device = 'cpu', early_stopping = True, n_factors = 16, lr = 0.0005, weight_decay = 1e-5):
+def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, total_runs=10, epochs = 40, device = 'cpu', early_stopping = True, lr = 0.0005, weight_decay = 1e-5):
 
     num_epochs = epochs
 
@@ -18,7 +18,7 @@ def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, 
             config['n_items'],
             config['n_genders'],
             config['n_authors'],
-            n_factors=n_factors
+            config['n_factors']
         ) # Overwriting the instance to avoid bias on each run
         model.to(device)
 
@@ -32,7 +32,7 @@ def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, 
         name=f"experiment_{run}",
         config={
         "learning_rate": lr,
-        "n_factors" : n_factors,
+        "n_factors" : config['n_factors'],
         "architecture": "NCF",
         "epochs": epochs,
         "optimizer" : optimizer.__class__.__name__

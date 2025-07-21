@@ -1,5 +1,5 @@
 from recommind_train import Processor, trainer, evaluate_batch_precision_recall
-from recommind_model import NeuMF
+from recommind_model import NCF
 from dotenv import load_dotenv
 import os
 import torch
@@ -51,7 +51,7 @@ def main():
 
         print('The training is starting!\n ')
 
-        model = NeuMF(n_users, n_items, n_genders, n_authors, n_factors=16)
+        model = NCF(n_users, n_items, n_genders, n_authors, n_factors=16)
 
         config = {
         'n_users': n_users,
@@ -73,7 +73,6 @@ def main():
             epochs = 1,
             device='cpu',
             early_stopping=True,
-            n_factors=16,
             lr=0.0005,
             weight_decay=1e-5
         )

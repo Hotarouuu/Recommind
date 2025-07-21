@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import os
 
-class NeuMF(nn.Module):
+class NCF(nn.Module):
     def __init__(self, n_users, n_items,n_genders, n_authors, n_factors=8):
         super().__init__()
 

@@ -1,1 +1,1 @@
-from .model import NeuMF, model_config
+from .model import NCF, model_config
