@@ -1,7 +1,5 @@
 # Data treatment and processing
 
-import polars as pl
-from sklearn.preprocessing import OrdinalEncoder
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -24,11 +22,14 @@ class PredictDataset(Dataset):
         return self.X[idx]
 
 # Pipeline class for recommendation
-## This class don't predict running only the pipeline for now. You have to run the "run()" and then you can use "pred_user()"
 
 class Pipeline(Processor):
-    def __init__(self, database):
+    def __init__(self, database, model, enc):
         super().__init__(database)
+        self.model = model
+        self.enc = enc
+        self.items_to_predict = None
+        self.result = None
 
 
     def _encode(self, ordinal_encoder=None):
@@ -49,24 +50,23 @@ class Pipeline(Processor):
         user_dataframe = self.df_merged[self.df_merged['User_id'] == user]
         user_items = user_dataframe['Id']
         all_items = self.df_merged['Id'].unique()
-        items_to_predict = list(set(all_items) - set(user_items))
-        items_to_predict = pd.DataFrame(items_to_predict, columns=['Id'])
+        self.items_to_predict = list(set(all_items) - set(user_items))
+        self.items_to_predict = pd.DataFrame(self.items_to_predict, columns=['Id'])
         books_data = self.df_merged.drop_duplicates(subset='Id')
-        result = pd.merge(books_data, items_to_predict, on='Id', how='inner')
-        result = result.drop('review/score', axis=1)
-        result['User_id'] = user
-
-        return result, items_to_predict
+        result = pd.merge(books_data, self.items_to_predict, on='Id', how='inner')
+        self.result = result.drop('review/score', axis=1)
+        self.result['User_id'] = user
     
-    def pred_user(self, result, top_k : int, book_dict : dict, model, items_to_predict):
-        dataset = PredictDataset(result)
+    def pred_user(self, top_k : int):
+
+        dataset = PredictDataset(self.result)
         loader = DataLoader(dataset, batch_size=2048, shuffle=True, drop_last=True)
 
-        model.eval()
+        self.model.eval()
         scores = []
         with torch.no_grad():
             for X in loader:
-                outputs = model(X)
+                outputs = self.model(X)
                 scores.append(outputs.cpu())
         scores = np.array(scores)
         scores = scores.flatten()
@@ -74,18 +74,19 @@ class Pipeline(Processor):
 
         top_indices = torch.topk(scores, top_k).indices
 
-        top_items = [items_to_predict.iloc[int(i)] for i in top_indices]
+        top_items = [self.items_to_predict.iloc[int(i)] for i in top_indices]
 
-        for idx in range(len(top_items)):
-            book_id = top_items[idx]['Id']
-            book = book_dict[book_id]
-            print(f" Recommended Book: {book}")
+        book_id = np.array([item['Id'] for item in top_items])
+        for ids in book_id:
+            print(f'book: {ids}')
+            
+        return book_id
 
-    def run(self, user, ordinal_encoder):
+    def run(self, user):
         self.data_treatment()
-        self._encode(ordinal_encoder)
-        result, items_to_predict = self._reco_user(user)
-        return result, items_to_predict
+        self._encode(self.enc)
+        self._reco_user(user)
+        
 
 
 

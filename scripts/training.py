@@ -35,7 +35,6 @@ def main():
 
         trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
-
         ordinal_encoder = proce.ordinal_encoder
 
         print(f'Saving the encoders')
@@ -45,6 +44,7 @@ def main():
         print('Done!\n')
 
         # Training
+
         print('The training is starting!\n ')
 
         model = NeuMF(n_users, n_items, n_genders, n_authors, n_factors=16)
@@ -54,7 +54,8 @@ def main():
         'n_items': n_items,
         'n_genders': n_genders,
         'n_authors': n_authors,
-        'n_factors' : 16}
+        'n_factors' : 16
+        }
 
         train = trainer(
             model,
@@ -68,16 +69,6 @@ def main():
             lr=0.0005,
             weight_decay=1e-5
         )
-
-        config = {
-                'n_users': n_users,
-                'n_items': n_items,
-                'n_genders': n_genders,
-                'n_authors': n_authors,
-                'n_factors' : 16
-
-        }
-
         
         # Evaluation
 
