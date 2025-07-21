@@ -15,7 +15,7 @@ ratings = pl.read_csv(dataset_ratings)
 
 # Creating database with DUCKDB
 
-con = duckdb.connect("proto.duckdb")
+con = duckdb.connect("scripts/proto.duckdb")
 
 con.execute(f"""
 CREATE OR REPLACE TABLE books AS

@@ -18,5 +18,6 @@ dependencies = [
     "torch",
     "setuptools",
     "setuptools-scm",
-    "duckdb"
+    "duckdb",
+    "wandb"
 ]

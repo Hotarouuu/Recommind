@@ -5,6 +5,7 @@ import os
 import torch
 import joblib
 import duckdb
+import wandb
 load_dotenv()  
 
 
@@ -14,6 +15,7 @@ load_dotenv()
 models_path = os.getenv('models')
 encoding_path = os.path.join(models_path, "encoding_models")
 ncf_path = os.path.join(models_path, "ncf_model")
+wandb_k = os.getenv('wandb_key')
 
 ## Only the datasets
 
@@ -25,9 +27,11 @@ dataset_books = os.path.join(dataset, "books_data.csv")
 
 def main():
 
+        wandb.login(key=wandb_k)
+
         # Importing data
 
-        con = duckdb.connect("proto.duckdb")
+        con = duckdb.connect("scripts/proto.duckdb")
   
         # Processing 
 
@@ -63,6 +67,10 @@ def main():
             ncf_path,
             trainloader,
             evalloader,
+            testloader,
+            n_k = 10,
+            total_runs = 5,
+            epochs = 1,
             device='cpu',
             early_stopping=True,
             n_factors=16,
@@ -70,16 +78,6 @@ def main():
             weight_decay=1e-5
         )
         
-        # Evaluation
-
-        k = 10
-
-        avg_precision, avg_recall, f_score, user_item_scores= evaluate_batch_precision_recall(testloader, model, k=k, device='cuda')
-
-        print(f"Precision@{k}: {avg_precision * 100:.4f}%")
-        print(f"Recall@{k}: {avg_recall * 100:.4f}%")
-        print(f'F-Score@{k}: {f_score * 100:4f}%')
-
 
 if __name__ == "__main__":
     main()

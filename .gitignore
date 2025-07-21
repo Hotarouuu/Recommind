@@ -96,3 +96,7 @@ venv/
 # Duckdb file
 
 notebooks/proto.Duckdb
+
+# Wandb files
+
+wandb/
