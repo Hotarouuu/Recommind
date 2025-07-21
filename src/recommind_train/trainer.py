@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 from torch.optim.lr_scheduler import StepLR
 import os
 
-def trainer(model, config, path, trainloader, evalloader, epochs = 40, device = 'cuda', early_stopping = True, n_factors = 16, lr = 0.0005, weight_decay = 1e-5):
+def trainer(model, config, path, trainloader, evalloader, epochs = 40, device = 'cpu', early_stopping = True, n_factors = 16, lr = 0.0005, weight_decay = 1e-5):
 
     num_epochs = epochs
     device = device

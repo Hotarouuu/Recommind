@@ -63,7 +63,7 @@ def main():
             ncf_path,
             trainloader,
             evalloader,
-            device='cuda',
+            device='cpu',
             early_stopping=True,
             n_factors=16,
             lr=0.0005,
