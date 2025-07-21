@@ -7,10 +7,14 @@ from dotenv import load_dotenv
 import duckdb
 load_dotenv()  
 
+# Preparing the paths
+
 models_path = os.getenv('models')
-ncf_path = os.path.join(models_path, "ncf_model")
+ncf_path, encoding_path = os.path.join(models_path, "ncf_model"), os.path.join(models_path, "encoding_models")
+
+# Model Config
+
 model = model_config(ncf_path, device='cpu')
-encoding_path = os.path.join(models_path, "encoding_models")
 
 # Importing data
 

@@ -11,19 +11,12 @@ load_dotenv()
 
 # Preparing the paths
 
-## Only models
 models_path = os.getenv('models')
-encoding_path = os.path.join(models_path, "encoding_models")
-ncf_path = os.path.join(models_path, "ncf_model")
 wandb_k = os.getenv('wandb_key')
 
-## Only the datasets
+## Only models
 
-dataset_path = os.getenv("data_dir") 
-dataset = os.path.join(dataset_path, "processed")
-dataset_ratings = os.path.join(dataset, "Books_rating.csv")
-dataset_books = os.path.join(dataset, "books_data.csv")
-
+encoding_path, ncf_path = os.path.join(models_path, "encoding_models"), os.path.join(models_path, "ncf_model")
 
 def main():
 
