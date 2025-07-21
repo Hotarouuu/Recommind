@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import joblib
+from recommind_train import Processor
 
 # Loader for PyTorch
 
@@ -25,29 +26,12 @@ class PredictDataset(Dataset):
 # Pipeline class for recommendation
 ## This class don't predict running only the pipeline for now. You have to run the "run()" and then you can use "pred_user()"
 
-class Pipeline:
-    def __init__(self, data_path, ratings_path, database):
-        self.data_path = data_path
-        self.ratings_path = ratings_path
-        self.df_merged = None
-        self.ordinal_encoder = None
-        self.database = database
+class Pipeline(Processor):
+    def __init__(self, database):
+        super().__init__(database)
 
-    def data_treatment(self):
-        query = """SELECT 
-            b.Title, 
-            b.authors, 
-            b.categories, 
-            r.Id, 
-            r.User_id, 
-            r."review/score",
-            b.ratingsCount
-        FROM books b
-        JOIN ratings r ON b.Title = r.Title;"""
 
-        self.df_merged = self.database.execute(query).fetchdf()
-
-    def encode(self, ordinal_encoder=None):
+    def _encode(self, ordinal_encoder=None):
 
         if ordinal_encoder is not None:
             self.ordinal_encoder = joblib.load(ordinal_encoder)
@@ -61,7 +45,7 @@ class Pipeline:
             self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
 
 
-    def reco_user(self, user):
+    def _reco_user(self, user):
         user_dataframe = self.df_merged[self.df_merged['User_id'] == user]
         user_items = user_dataframe['Id']
         all_items = self.df_merged['Id'].unique()
@@ -99,8 +83,8 @@ class Pipeline:
 
     def run(self, user, ordinal_encoder):
         self.data_treatment()
-        self.encode(ordinal_encoder)
-        result, items_to_predict = self.reco_user(user)
+        self._encode(ordinal_encoder)
+        result, items_to_predict = self._reco_user(user)
         return result, items_to_predict
 
 

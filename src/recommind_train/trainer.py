@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 from torch.optim.lr_scheduler import StepLR
 import os
 
-def trainer(model, path, trainloader, evalloader, epochs = 40, device = 'cuda', early_stopping = True, n_factors = 16, lr = 0.0005, weight_decay = 1e-5):
+def trainer(model, config, path, trainloader, evalloader, epochs = 40, device = 'cuda', early_stopping = True, n_factors = 16, lr = 0.0005, weight_decay = 1e-5):
 
     num_epochs = epochs
     device = device
@@ -82,7 +82,10 @@ def trainer(model, path, trainloader, evalloader, epochs = 40, device = 'cuda', 
                     best_val_loss = val_loss
                     epochs_no_improve = 0
             
-                    torch.save(model.state_dict(), os.path.join(path, 'best_model.pth'))
+                    torch.save({
+                            'model_state_dict': model.state_dict(),
+                            'config': config
+                    }, os.path.join(path, 'recommind_best_model.pth'))
                     print(f'    --> New best eval loss: {best_val_loss:.4f}. Model saved.')
                 else:
                     epochs_no_improve += 1

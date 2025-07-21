@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "recommind_packages"
 description = "local package"
-version = "0.0.2"
+version = "1.0.0"
 requires-python = ">=3.11"
 dependencies = [
     "scikit-learn",

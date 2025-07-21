@@ -5,25 +5,23 @@ from recommind_model import model_config
 import torch
 import os
 from dotenv import load_dotenv
+import duckdb
 load_dotenv()  
+
 models_path = os.getenv('models')
-
 ncf_path = os.path.join(models_path, "ncf_model")
-
 model = model_config(ncf_path, device='cpu')
-
-dataset_path = os.getenv("data_dir") 
-dataset = os.path.join(dataset_path, "processed")
-dataset_ratings = os.path.join(dataset, "Books_rating.csv")
-dataset_books = os.path.join(dataset, "books_data.csv")
 encoding_path = os.path.join(models_path, "encoding_models")
 
-enc1 = os.path.join(encoding_path, "ordinal_encoder.joblib")
+# Importing data
 
+con = duckdb.connect("proto.duckdb")
 
-proce = Pipeline(dataset_books, dataset_ratings)
+enc = os.path.join(encoding_path, "ordinal_encoder.joblib")
 
-result, items_to_predict = proce.run(212393, enc1)
+proce = Pipeline(con)
+
+result, items_to_predict = proce.run(212393, enc)
 
 
 book_df = proce.df_merged[['Id', 'Title']]

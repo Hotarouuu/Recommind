@@ -31,14 +31,10 @@ def main():
   
         # Processing 
 
-        proce = Processor(dataset_books, dataset_ratings, con)
+        proce = Processor(con)
 
         trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
-        print(n_users)
-        print(n_items)
-        print(n_genders)
-        print(n_authors)
 
         ordinal_encoder = proce.ordinal_encoder
 
@@ -53,8 +49,16 @@ def main():
 
         model = NeuMF(n_users, n_items, n_genders, n_authors, n_factors=16)
 
+        config = {
+        'n_users': n_users,
+        'n_items': n_items,
+        'n_genders': n_genders,
+        'n_authors': n_authors,
+        'n_factors' : 16}
+
         train = trainer(
             model,
+            config,
             ncf_path,
             trainloader,
             evalloader,
@@ -73,10 +77,6 @@ def main():
                 'n_factors' : 16
 
         }
-        torch.save({
-                'model_state_dict': model.state_dict(),
-                'config': config
-        }, os.path.join(ncf_path, 'recommind_model.pth'))
 
         
         # Evaluation

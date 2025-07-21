@@ -76,8 +76,11 @@ class NeuMF(nn.Module):
         return out
 
 def model_config(model_path, device='cpu'):
-    mconfig = torch.load(os.path.join(model_path, 'recommind_model.pth'), map_location=torch.device(device))
+    mconfig = torch.load(
+        os.path.join(model_path, 'recommind_best_model.pth'),
+        map_location=torch.device(device),
+        weights_only=False  
+    )
     model = NeuMF(**mconfig['config'])
     model.load_state_dict(mconfig['model_state_dict'])
-
     return model

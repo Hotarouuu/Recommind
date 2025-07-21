@@ -8,17 +8,12 @@ load_dotenv()
 ## Only the datasets
 
 dataset_path = r"C:\Users\lucas\Documents\GitHub\Recommind\data\processed"
-
-
-
 dataset_ratings = os.path.join(dataset_path, "Books_rating.csv")
 dataset_books = os.path.join(dataset_path, "books_data.csv")
-
-
 books_data = pl.read_csv(dataset_books)
 ratings = pl.read_csv(dataset_ratings)
 
-
+# Creating database with DUCKDB
 
 con = duckdb.connect("proto.duckdb")
 
