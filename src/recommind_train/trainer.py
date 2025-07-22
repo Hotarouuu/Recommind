@@ -7,7 +7,7 @@ import os
 import wandb 
 from .evaluator_metrics import evaluate_batch_precision_recall
 
-def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, total_runs=10, epochs = 40, device = 'cpu', lr = 0.0005, weight_decay = 1e-5):
+def trainer(model, config, path, trainloader, evalloader, testloader, name_experiment, n_k = 10, total_runs=10, epochs = 40, device = 'cpu', lr = 0.0005, weight_decay = 1e-5):
 
     num_epochs = epochs
 
@@ -26,10 +26,12 @@ def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, 
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
         scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
+        name = f'{name_experiment}_{run}'
+
         
         wandb.init(
         project="recommind",
-        name=f"experiment_{run}",
+        name=name,
         config={
         "learning_rate": lr,
         "n_factors" : config['n_factors'],
@@ -109,7 +111,7 @@ def trainer(model, config, path, trainloader, evalloader, testloader, n_k = 10, 
                     }, os.path.join(path, 'recommind_best_model.pth'))
                     print(f'    --> New best eval loss: {best_val_loss:.4f}. Model saved.')
 
-                    artifact = wandb.Artifact(name="recommind_model", type="model")
+                    artifact = wandb.Artifact(name=f"recommind_{name}", type="model")
                     artifact.add_file(local_path=os.path.join(path, 'recommind_best_model.pth'), name="recommind_model")
                     artifact.save()
 

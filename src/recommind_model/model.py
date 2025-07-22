@@ -81,6 +81,6 @@ def model_config(model_path, device='cpu'):
         map_location=torch.device(device),
         weights_only=False  
     )
-    model = NeuMF(**mconfig['config'])
+    model = NCF(**mconfig['config'])
     model.load_state_dict(mconfig['model_state_dict'])
     return model

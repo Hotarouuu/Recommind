@@ -10,12 +10,15 @@ import argparse
 load_dotenv()  
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--NAME', type=str, help='Name of the Experiment')
+
 parser.add_argument('--EXPERIMENT_RUNS', type=int, help='Number of Experiments', default=5)
 parser.add_argument('--EPOCHS', type=int, help='Training Epochs')
 parser.add_argument('--LEARNING_RATE', type=float, help='Initial Learning Rate', default=0.005)
 
 args = parser.parse_args()
 
+name = args.NAME
 lr = args.LEARNING_RATE
 epochs = args.EPOCHS
 runs = args.EXPERIMENT_RUNS
@@ -73,11 +76,11 @@ def main():
             trainloader,
             evalloader,
             testloader,
+            name_experiment=name,
             n_k = 10,
             total_runs = runs,
             epochs = epochs,
-            device='cpu',
-            early_stopping=True,
+            device='cuda',
             lr=lr,
             weight_decay=1e-5
         )
