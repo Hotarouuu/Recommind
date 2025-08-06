@@ -1,29 +1,43 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from typing import List, Optional, Dict, Union
+from pydantic import BaseModel, Field
 import pandas as pd
 import joblib
+from recommind_pred import Pipeline
+from recommind_model import model_config
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+models_path = os.getenv('models')
+ncf_path, encoding_path = os.path.join(models_path, "ncf_model"), os.path.join(models_path, "encoding_models")
+enc = os.path.join(encoding_path, "ordinal_encoder.joblib") # The pipeline class already load the joblib internally
+model = model_config(ncf_path, device='cpu')
 
 app = FastAPI()
 
 class InputData(BaseModel):
-    Gender: str
-    Age: int
-    HasDrivingLicense: int
-    RegionID: float
-    Switch: int
-    PastAccident: str
-    AnnualPremium: float
+    Title: str
+    authors: Union[str, int]
+    categories: Union[str, int]
+    Id: Union[str, int]
+    User_id: Union[str, int]
+    review_score: float = Field(alias="review/score")
+    ratingsCount: float
 
-model = joblib.load('models/model.pkl')
+class WrapperModel(BaseModel):
+    data: List[InputData]
+    user: int
 
 @app.get("/")
-async def read_root():
-    return {"health_check": "OK", "model_version": 1}
+def read_root():
+    return {"Online": "Yes", "model_version": 1}
 
 @app.post("/predict")
-async def predict(input_data: InputData):
-    
-        df = pd.DataFrame([input_data.model_dump().values()], 
-                          columns=input_data.model_dump().keys())
-        pred = model.predict(df)
-        return {"predicted_class": int(pred[0])}
+def predict(payload: WrapperModel):
+
+    df = pd.DataFrame([item.dict() for item in payload.data])
+
+    proce = Pipeline(df, model, enc)
+    result = proce.run(payload.user)
+    return result

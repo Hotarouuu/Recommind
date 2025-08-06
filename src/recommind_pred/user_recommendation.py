@@ -23,30 +23,29 @@ class PredictDataset(Dataset):
 
 # Pipeline class for recommendation
 
-class Pipeline(Processor):
-    def __init__(self, database, model, enc):
-        super().__init__(database)
+class Pipeline():
+    def __init__(self, df, model, enc: str):
         self.model = model
-        self.enc = enc
         self.items_to_predict = None
         self.result = None
+        self.enc = enc
+        self.df_merged = df
 
+    def _data_treatment(self):
 
-    def _encode(self, ordinal_encoder=None):
+        ordinal_encoder = joblib.load(self.enc)
 
-        if ordinal_encoder is not None:
-            self.ordinal_encoder = joblib.load(ordinal_encoder)
+        categorical_cols = ['User_id', 'Id', 'authors', 'categories']
 
-            categorical_cols = ['User_id', 'Id', 'authors', 'categories']
+        encoded = ordinal_encoder.transform(self.df_merged[categorical_cols].to_numpy())
 
-            encoded = self.ordinal_encoder.fit_transform(self.df_merged[categorical_cols].to_numpy())
+        for i, col in enumerate(categorical_cols):
+            self.df_merged[col] = encoded[:, i].astype(int)
 
-            for i, col in enumerate(categorical_cols):
-                self.df_merged[col] = encoded[:, i].astype(int)
-            self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
-
+        self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
 
     def _reco_user(self, user):
+
         user_dataframe = self.df_merged[self.df_merged['User_id'] == user]
         user_items = user_dataframe['Id']
         all_items = self.df_merged['Id'].unique()
@@ -54,10 +53,10 @@ class Pipeline(Processor):
         self.items_to_predict = pd.DataFrame(self.items_to_predict, columns=['Id'])
         books_data = self.df_merged.drop_duplicates(subset='Id')
         result = pd.merge(books_data, self.items_to_predict, on='Id', how='inner')
-        self.result = result.drop('review/score', axis=1)
+        self.result = result.drop('review_score', axis=1)
         self.result['User_id'] = user
     
-    def pred_user(self, top_k : int):
+    def _pred_user(self, top_k : int):
 
         dataset = PredictDataset(self.result)
         loader = DataLoader(dataset, batch_size=2048, shuffle=True, drop_last=True)
@@ -72,20 +71,22 @@ class Pipeline(Processor):
         scores = scores.flatten()
         scores = torch.tensor(scores)
 
+        print(scores) 
+
         top_indices = torch.topk(scores, top_k).indices
 
         top_items = [self.items_to_predict.iloc[int(i)] for i in top_indices]
 
         book_id = np.array([item['Id'] for item in top_items])
-        for ids in book_id:
-            print(f'book: {ids}')
             
         return book_id
 
     def run(self, user):
-        self.data_treatment()
-        self._encode(self.enc)
+        self._data_treatment()
+        print(self.df_merged.head())
         self._reco_user(user)
+        result = self._pred_user(top_k = 10)
+        return result
         
 
 

@@ -28,49 +28,36 @@ class Loader(Dataset):
         return len(self.ratings)
 
 class Processor:
-    def __init__(self, database):
-        self.df_merged = None
+    def __init__(self, df_merged):
+        self.df_merged = df_merged
         self.n_users = None
         self.n_items = None
         self.n_authors = None
         self.n_genders = None
         self.ordinal_encoder = None
-        self.database = database
 
-    def data_treatment(self):
-
-        query = """SELECT 
-            b.Title, 
-            b.authors, 
-            b.categories, 
-            r.Id, 
-            r.User_id, 
-            r."review/score",
-            b.ratingsCount
-        FROM books b
-        JOIN ratings r ON b.Title = r.Title;"""
-
-        self.df_merged = self.database.execute(query).fetchdf()
+        
+    def data_treatment(self, use_encoder=True):
+        
         self.df_merged['categories'] = self.df_merged['categories'].str.replace('[', '', regex=False).str.replace(']', '', regex=False)
         self.df_merged['authors'] = self.df_merged['authors'].str.replace('[', '', regex=False).str.replace(']', '', regex=False)
         self.df_merged['categories'] = self.df_merged['categories'].fillna('No Category')
         self.df_merged['ratingsCount'] = self.df_merged['ratingsCount'].fillna(0)
-        
-    def _encode(self):
 
-        self.ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-        encoded = self.ordinal_encoder.fit_transform(self.df_merged[['User_id', 'Id', 'categories', 'authors']].to_numpy())
+        if use_encoder:
+            self.ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+            encoded = self.ordinal_encoder.fit_transform(self.df_merged[['User_id', 'Id', 'categories', 'authors']].to_numpy())
 
-        self.df_merged['User_id'] = encoded[:, 0].astype(int)
-        self.df_merged['Id'] = encoded[:, 1].astype(int)
-        self.df_merged['categories'] = encoded[:, 2].astype(int)
-        self.df_merged['authors'] = encoded[:, 3].astype(int)
-        self.n_users = self.df_merged['User_id'].max() + 1
-        self.n_items = self.df_merged['Id'].max() + 1
-        self.n_genders = self.df_merged['categories'].max() + 1
-        self.n_authors = self.df_merged['authors'].max() + 1
+            self.df_merged['User_id'] = encoded[:, 0].astype(int)
+            self.df_merged['Id'] = encoded[:, 1].astype(int)
+            self.df_merged['categories'] = encoded[:, 2].astype(int)
+            self.df_merged['authors'] = encoded[:, 3].astype(int)
+            self.n_users = self.df_merged['User_id'].max() + 1
+            self.n_items = self.df_merged['Id'].max() + 1
+            self.n_genders = self.df_merged['categories'].max() + 1
+            self.n_authors = self.df_merged['authors'].max() + 1
 
-        self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
+            self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
 
     def _get_loaders(self, batch_size=2048):
 
@@ -117,7 +104,6 @@ class Processor:
         return trainloader, testloader, valloader
 
     def run(self):
-
         self.data_treatment()
         self._encode()
         trainloader, testloader, valloader = self._get_loaders()
