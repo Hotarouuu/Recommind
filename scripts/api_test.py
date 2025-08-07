@@ -42,7 +42,7 @@ df['authors'] = df['Id'].fillna('No Authors')
 json_data = df.to_dict(orient="records")
 
 payload = {
-    'data' : json_data[:10000],
+    'data' : json_data,
     'user' : 1008961
 }
 # Envia o POST

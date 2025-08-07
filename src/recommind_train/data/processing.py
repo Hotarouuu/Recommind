@@ -105,6 +105,5 @@ class Processor:
 
     def run(self):
         self.data_treatment()
-        self._encode()
         trainloader, testloader, valloader = self._get_loaders()
         return trainloader, testloader, valloader, self.n_users, self.n_items, self.n_genders, self.n_authors

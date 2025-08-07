@@ -40,10 +40,23 @@ def main():
         # Importing data
 
         con = duckdb.connect("scripts/proto.duckdb")
+
+        query = """SELECT 
+            b.Title, 
+            b.authors, 
+            b.categories, 
+            r.Id, 
+            r.User_id, 
+            r."review/score",
+            b.ratingsCount
+        FROM books b
+        JOIN ratings r ON b.Title = r.Title;"""
+
+        df = con.execute(query).fetchdf()
   
         # Processing 
 
-        proce = Processor(con)
+        proce = Processor(df)
 
         trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
@@ -51,7 +64,13 @@ def main():
 
         print(f'Saving the encoders')
 
+
         joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
+        
+        artifact = wandb.Artifact(name=f"recommind_{name}", type="encoder")
+        artifact.add_file(local_path=os.path.join(encoding_path, 'ordinal_encoder.joblib'), name="encoder_model")
+        artifact.save()
+
 
         print('Done!\n')
 
