@@ -1,89 +1,112 @@
-from recommind_packages import Processor, NeuMF, trainer, evaluate_batch_precision_recall, data_treatment
+from recommind_train import Processor, trainer, evaluate_batch_precision_recall
+from recommind_model import NCF
 from dotenv import load_dotenv
 import os
 import torch
 import joblib
+import duckdb
+import wandb
+import argparse
 load_dotenv()  
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--NAME', type=str, help='Name of the Experiment')
+
+parser.add_argument('--EXPERIMENT_RUNS', type=int, help='Number of Experiments', default=5)
+parser.add_argument('--EPOCHS', type=int, help='Training Epochs')
+parser.add_argument('--LEARNING_RATE', type=float, help='Initial Learning Rate', default=0.005)
+
+args = parser.parse_args()
+
+name = args.NAME
+lr = args.LEARNING_RATE
+epochs = args.EPOCHS
+runs = args.EXPERIMENT_RUNS
 
 
 # Preparing the paths
 
-## Only models
 models_path = os.getenv('models')
-encoding_path = os.path.join(models_path, "encoding_models")
-ncf_path = os.path.join(models_path, "ncf_model")
+wandb_k = os.getenv('wandb_key')
 
-## Only the datasets
+## Only models
 
-dataset_path = os.getenv("data_dir") 
-dataset = os.path.join(dataset_path, "processed")
-dataset_ratings = os.path.join(dataset, "Books_rating.csv")
-dataset_books = os.path.join(dataset, "books_data.csv")
-
+encoding_path, ncf_path = os.path.join(models_path, "encoding_models"), os.path.join(models_path, "ncf_model")
 
 def main():
+
+        wandb.login(key=wandb_k)
+
+        # Importing data
+
+        con = duckdb.connect("scripts/proto.duckdb")
+
+ 
+        query = """
+        SELECT 
+            b.Title, 
+            b.authors, 
+            b.categories, 
+            r.Id, 
+            r.User_id, 
+            r."review/score",
+            b.ratingsCount
+        FROM books b
+        JOIN ratings r ON b.Title = r.Title
+        ORDER BY r.User_id, r.Id, b.categories, b.authors;
+        """
+
+
+        df = con.execute(query).fetchdf()
   
         # Processing 
 
-        proce = Processor(dataset_books, dataset_ratings)
+        proce = Processor(df)
 
-        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
+        trainloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
         ordinal_encoder = proce.ordinal_encoder
 
-
-        print(f'Saving the encoders')
+        print(f'Saving the encoders\n')
 
         joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
+        
+        artifact = wandb.Artifact(name=f"recommind_{name}", type="encoder")
+        artifact.add_file(local_path=os.path.join(encoding_path, 'ordinal_encoder.joblib'), name="encoder_model")
+        artifact.save()
+
 
         print('Done!\n')
 
-        # Preparing to the training 
-
-        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
-
-
         # Training
+
         print('The training is starting!\n ')
 
-        model = NeuMF(n_users, n_items, n_genders, n_authors, n_factors=16)
+        model = NCF(n_users, n_items, n_genders, n_authors, n_factors=16)
+
+        config = {
+        'n_users': n_users,
+        'n_items': n_items,
+        'n_genders': n_genders,
+        'n_authors': n_authors,
+        'n_factors' : 16
+        }
 
         train = trainer(
             model,
+            config,
             ncf_path,
             trainloader,
             evalloader,
+            name_experiment=name,
+            n_k = 10,
+            total_runs = runs,
+            epochs = epochs,
             device='cuda',
-            early_stopping=True,
-            n_factors=16,
-            lr=0.0005,
+            lr=lr,
             weight_decay=1e-5
         )
-
-        config = {
-                'n_users': n_users,
-                'n_items': n_items,
-                'n_genders': n_genders,
-                'n_authors': n_authors,
-                'n_factors' : 16
-
-        }
-        torch.save({
-                'model_state_dict': model.state_dict(),
-                'config': config
-        }, os.path.join(ncf_path, 'recommind_model.pth'))
-
         
-        # Evaluation
-
-        k = 10
-
-        avg_precision, avg_recall, f_score, user_item_scores= evaluate_batch_precision_recall(testloader, model, k=k, device='cuda')
-
-        print(f"Precision@{k}: {avg_precision * 100:.4f}%")
-        print(f"Recall@{k}: {avg_recall * 100:.4f}%")
-        print(f'F-Score@{k}: {f_score * 100:4f}%')
-
 
 if __name__ == "__main__":
     main()

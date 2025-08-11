@@ -5,14 +5,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "recommind_packages"
 description = "local package"
-version = "0.0.2"
-requires-python = ">=3.12"
+version = "1.0.0"
+requires-python = ">=3.11"
 dependencies = [
-    "torch",
     "scikit-learn",
     "polars",
     "numpy",
     "pandas",
     "pyarrow",
-    "joblib"
+    "joblib",
+    "dotenv",
+    "torch",
+    "setuptools",
+    "setuptools-scm",
+    "duckdb",
+    "wandb"
 ]

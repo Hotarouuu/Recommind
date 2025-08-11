@@ -1,34 +1,47 @@
 # Not useful. It's just for me to test the model
 
 from recommind_pred import Pipeline
+from recommind_train import data_treatment
 from recommind_model import model_config
-import torch
 import os
 from dotenv import load_dotenv
+import duckdb
 load_dotenv()  
-models_path = os.getenv('models')
 
-ncf_path = os.path.join(models_path, "ncf_model")
+# Preparing the paths
+
+models_path = os.getenv('models')
+ncf_path, encoding_path = os.path.join(models_path, "ncf_model"), os.path.join(models_path, "encoding_models")
+
+# Model Config
 
 model = model_config(ncf_path, device='cpu')
 
-dataset_path = os.getenv("data_dir") 
-dataset = os.path.join(dataset_path, "processed")
-dataset_ratings = os.path.join(dataset, "Books_rating.csv")
-dataset_books = os.path.join(dataset, "books_data.csv")
-encoding_path = os.path.join(models_path, "encoding_models")
+# Importing data
 
-enc1 = os.path.join(encoding_path, "ordinal_encoder.joblib")
+con = duckdb.connect("proto.duckdb")
 
+query = """SELECT 
+    b.Title, 
+    b.authors, 
+    b.categories, 
+    r.Id, 
+    r.User_id, 
+    r."review/score",
+    b.ratingsCount
+FROM books b
+JOIN ratings r ON b.Title = r.Title;"""
 
-proce = Pipeline(dataset_books, dataset_ratings)
+df = con.execute(query).fetchdf()
 
-result, items_to_predict = proce.run(212393, enc1)
+df = data_treatment(df)
 
+enc = os.path.join(encoding_path, "ordinal_encoder.joblib")
 
-book_df = proce.df_merged[['Id', 'Title']]
+proce = Pipeline(df, model, enc)
 
-book_dict = dict(zip(book_df['Id'], book_df['Title']))
+proce.run(212393)
 
-proce.pred_user(result, 10, book_dict, model, items_to_predict)
+result = proce.pred_user(top_k = 10)
 
+print(result)

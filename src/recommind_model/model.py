@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import os
 
-class NeuMF(nn.Module):
+class NCF(nn.Module):
     def __init__(self, n_users, n_items,n_genders, n_authors, n_factors=8):
         super().__init__()
 
@@ -44,13 +44,11 @@ class NeuMF(nn.Module):
         self.final_layer = nn.Linear(n_factors + 32, 1)
 
     def forward(self, data):
-        users = data[:, 1]
-        items = data[:, 0]
-        genders = data[:, 3]
-        authors = data[:, 2]
+        users = data[:, 3]
+        items = data[:, 2]
+        genders = data[:, 1]
+        authors = data[:, 0]
         ratingsCount = data[:, 4]
-
-
 
         # GMF path
         gmf_user = self.user_gmf(users)
@@ -69,7 +67,6 @@ class NeuMF(nn.Module):
 
         # Concatenate user, item, and text embeddings
         mlp_input = torch.cat([mlp_user, mlp_items], dim=1)
-       # print(mlp_input.shape)
         mlp_out = self.mlp(mlp_input)
 
         # Combine GMF and MLP paths and make final prediction
@@ -79,8 +76,11 @@ class NeuMF(nn.Module):
         return out
 
 def model_config(model_path, device='cpu'):
-    mconfig = torch.load(os.path.join(model_path, 'recommind_model.pth'), map_location=torch.device(device))
-    model = NeuMF(**mconfig['config'])
+    mconfig = torch.load(
+        os.path.join(model_path, 'recommind_best_model.pth'),
+        map_location=torch.device(device),
+        weights_only=False  
+    )
+    model = NCF(**mconfig['config'])
     model.load_state_dict(mconfig['model_state_dict'])
-
     return model
