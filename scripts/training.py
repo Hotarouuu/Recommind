@@ -41,7 +41,9 @@ def main():
 
         con = duckdb.connect("scripts/proto.duckdb")
 
-        query = """SELECT 
+ 
+        query = """
+        SELECT 
             b.Title, 
             b.authors, 
             b.categories, 
@@ -50,7 +52,10 @@ def main():
             r."review/score",
             b.ratingsCount
         FROM books b
-        JOIN ratings r ON b.Title = r.Title;"""
+        JOIN ratings r ON b.Title = r.Title
+        ORDER BY r.User_id, r.Id, b.categories, b.authors;
+        """
+
 
         df = con.execute(query).fetchdf()
   
@@ -58,12 +63,11 @@ def main():
 
         proce = Processor(df)
 
-        trainloader, testloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
+        trainloader, evalloader, n_users, n_items, n_genders, n_authors = proce.run()
 
         ordinal_encoder = proce.ordinal_encoder
 
-        print(f'Saving the encoders')
-
+        print(f'Saving the encoders\n')
 
         joblib.dump(ordinal_encoder, os.path.join(encoding_path, 'ordinal_encoder.joblib'))
         
@@ -94,7 +98,6 @@ def main():
             ncf_path,
             trainloader,
             evalloader,
-            testloader,
             name_experiment=name,
             n_k = 10,
             total_runs = runs,

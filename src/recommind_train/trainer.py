@@ -7,7 +7,7 @@ import os
 import wandb 
 from .evaluator_metrics import evaluate_batch_precision_recall
 
-def trainer(model, config, path, trainloader, evalloader, testloader, name_experiment, n_k = 10, total_runs=10, epochs = 40, device = 'cpu', lr = 0.0005, weight_decay = 1e-5):
+def trainer(model, config, path, trainloader, evalloader, name_experiment, n_k = 10, total_runs=10, epochs = 40, device = 'cpu', lr = 0.0005, weight_decay = 1e-5):
 
     num_epochs = epochs
 
@@ -127,7 +127,7 @@ def trainer(model, config, path, trainloader, evalloader, testloader, name_exper
             scheduler.step()
 
         avg_precision, avg_recall, f_score, user_item_scores = evaluate_batch_precision_recall(
-            testloader, model, k=n_k, device=device
+            evalloader, model, k=n_k, device=device
         )
 
         print(f"Precision@{n_k}: {avg_precision * 100:.4f}%")

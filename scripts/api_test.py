@@ -18,7 +18,8 @@ enc = os.path.join(encoding_path, "ordinal_encoder.joblib")
 # Conexão e query
 con = duckdb.connect("proto.duckdb")
 
-query = """SELECT 
+query = """
+SELECT 
     b.Title, 
     b.authors, 
     b.categories, 
@@ -27,7 +28,9 @@ query = """SELECT
     r."review/score",
     b.ratingsCount
 FROM books b
-JOIN ratings r ON b.Title = r.Title;"""
+JOIN ratings r ON b.Title = r.Title
+ORDER BY r.User_id, r.Id, b.categories, b.authors;
+"""
 
 df = con.execute(query).fetchdf()
 
@@ -36,14 +39,30 @@ df['authors'] = df['authors'].str.replace('[', '', regex=False).str.replace(']',
 df['categories'] = df['categories'].fillna('No Category')
 df['ratingsCount'] = df['ratingsCount'].fillna(0)
 df['User_id'] = df['User_id'].fillna('No User')
-df['authors'] = df['Id'].fillna('No Authors')
+df['authors'] = df['authors'].fillna('No Authors')
 
+def clean_string_columns(df, columns):
+    for col in columns:
+        df[col] = df[col].astype(str)
+
+        df[col] = (
+            df[col]
+            .str.replace(r'[\[\]\(\)\'\"]', '', regex=True) 
+            .str.replace(r'\s+', ' ', regex=True)           
+            .str.strip()                                   
+            .str.lower()                                    
+        )
+
+    return df
+df = clean_string_columns(df, ['User_id', 'Id', 'categories', 'authors'])
+
+df = Pipeline._data_treatment(df, enc)
 
 json_data = df.to_dict(orient="records")
 
 payload = {
-    'data' : json_data,
-    'user' : 1008961
+    'data' : json_data[:10000],
+    'user' : 0
 }
 # Envia o POST
 response = requests.post(
@@ -52,3 +71,4 @@ response = requests.post(
 )
 
 print(f'Status code: {response.status_code}')
+print(f'Response: {response.content}')

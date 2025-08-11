@@ -24,25 +24,25 @@ class PredictDataset(Dataset):
 # Pipeline class for recommendation
 
 class Pipeline():
-    def __init__(self, df, model, enc: str):
+    def __init__(self, df, model):
         self.model = model
         self.items_to_predict = None
         self.result = None
-        self.enc = enc
         self.df_merged = df
 
-    def _data_treatment(self):
+    @staticmethod
+    def _data_treatment(df_merged, enc):
+        ordinal_encoder = joblib.load(enc)
 
-        ordinal_encoder = joblib.load(self.enc)
+        categorical_cols = ['User_id', 'Id', 'categories', 'authors']
 
-        categorical_cols = ['User_id', 'Id', 'authors', 'categories']
-
-        encoded = ordinal_encoder.transform(self.df_merged[categorical_cols].to_numpy())
+        encoded = ordinal_encoder.transform(df_merged[categorical_cols].to_numpy())
 
         for i, col in enumerate(categorical_cols):
-            self.df_merged[col] = encoded[:, i].astype(int)
+            df_merged[col] = encoded[:, i].astype(int)
 
-        self.df_merged = self.df_merged[(self.df_merged['User_id'] != -1) & (self.df_merged['Id'] != -1)]
+        df_merged = df_merged[(df_merged['User_id'] != -1) & (df_merged['Id'] != -1)]
+        return df_merged
 
     def _reco_user(self, user):
 
@@ -82,8 +82,6 @@ class Pipeline():
         return book_id
 
     def run(self, user):
-        self._data_treatment()
-        print(self.df_merged.head())
         self._reco_user(user)
         result = self._pred_user(top_k = 10)
         return result

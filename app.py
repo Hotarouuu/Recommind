@@ -35,9 +35,20 @@ def read_root():
 
 @app.post("/predict")
 def predict(payload: WrapperModel):
+    
 
     df = pd.DataFrame([item.dict() for item in payload.data])
 
-    proce = Pipeline(df, model, enc)
-    result = proce.run(payload.user)
-    return result
+    df = df[
+        (df['User_id'] != -1) & 
+        (df['Id'] != -1) & 
+        (df['authors'] != -1) & 
+        (df['categories'] != -1)
+    ]
+
+    proc = Pipeline(df, model)
+    result = proc.run(payload.user)
+
+    result = result.tolist()
+
+    return {"predictions": result}
