@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from typing import List, Optional, Dict, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+import duckdb
 import pandas as pd
 import joblib
 from recommind_pred import Pipeline
@@ -11,44 +11,55 @@ load_dotenv()
 
 models_path = os.getenv('models')
 ncf_path, encoding_path = os.path.join(models_path, "ncf_model"), os.path.join(models_path, "encoding_models")
+
+
+print('Loading the database...')
+db = duckdb.connect("proto.duckdb")
+query = """
+SELECT 
+    b.Title, 
+    b.authors, 
+    b.categories, 
+    r.Id, 
+    r.User_id, 
+    r."review/score",
+    b.ratingsCount
+FROM books b
+JOIN ratings r ON b.Title = r.Title
+ORDER BY r.User_id, r.Id, b.categories, b.authors;
+"""
+
+df = db.execute(query).fetchdf()
+
+print('Done!\n')
+
+print('Loading the model...')
 enc = os.path.join(encoding_path, "ordinal_encoder.joblib") # The pipeline class already load the joblib internally
 model = model_config(ncf_path, device='cpu')
+print('Done!\n')
+
+print(f'Instantiating the pipeline...')
+pipe = Pipeline(df, model, enc)
+print('Done!\n')
+
+print('Treating the data...')
+pipe._data_treatment() 
+df = pipe.df_merged
+print('Done!\n')
 
 app = FastAPI()
 
-class InputData(BaseModel):
-    Title: str
-    authors: Union[str, int]
-    categories: Union[str, int]
-    Id: Union[str, int]
-    User_id: Union[str, int]
-    review_score: float = Field(alias="review/score")
-    ratingsCount: float
+class PredictRequest(BaseModel):
+    user_id: int  
 
-class WrapperModel(BaseModel):
-    data: List[InputData]
-    user: int
 
 @app.get("/")
 def read_root():
     return {"Online": "Yes", "model_version": 1}
 
 @app.post("/predict")
-def predict(payload: WrapperModel):
+def predict(req: PredictRequest):
     
+    result = pipe.run(req.user_id)
 
-    df = pd.DataFrame([item.dict() for item in payload.data])
-
-    df = df[
-        (df['User_id'] != -1) & 
-        (df['Id'] != -1) & 
-        (df['authors'] != -1) & 
-        (df['categories'] != -1)
-    ]
-
-    proc = Pipeline(df, model)
-    result = proc.run(payload.user)
-
-    result = result.tolist()
-
-    return {"predictions": result}
+    return {"predictions": result.tolist()}

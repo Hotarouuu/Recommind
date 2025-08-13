@@ -54,6 +54,8 @@ class Processor:
         
     def data_treatment(self, use_encoder=True):
 
+        self.df_merged['categories'] = self.df_merged['categories'].str.replace('[', '', regex=False).str.replace(']', '', regex=False)
+        self.df_merged['authors'] = self.df_merged['authors'].str.replace('[', '', regex=False).str.replace(']', '', regex=False)
         self.df_merged = clean_string_columns(self.df_merged, ['User_id', 'Id', 'categories', 'authors'])
         self.df_merged['categories'] = self.df_merged['categories'].fillna('No Category')
         self.df_merged['ratingsCount'] = self.df_merged['ratingsCount'].fillna(0)
