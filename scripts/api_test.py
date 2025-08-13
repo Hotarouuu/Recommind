@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 
-payload = payload = {"user_id": 42}
+payload = payload = {"user_id": 'A00117421L76WVWG4UX95'}
 # Envia o POST
 response = requests.post(
     "http://127.0.0.1:8000/predict",

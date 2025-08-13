@@ -29,16 +29,14 @@ class Pipeline(Processor):
         self.model = model
         self.items_to_predict = None
         self.result = None
-        self.enc = enc
+        self.ordinal_encoder = joblib.load(enc)
 
     def _data_treatment(self):
         super().data_treatment(use_encoder = False)
 
-        ordinal_encoder = joblib.load(self.enc)
-
         categorical_cols = ['User_id', 'Id', 'categories', 'authors']
 
-        encoded = ordinal_encoder.transform(self.df_merged[categorical_cols].to_numpy())
+        encoded = self.ordinal_encoder.transform(self.df_merged[categorical_cols].to_numpy())
 
         for i, col in enumerate(categorical_cols):
             self.df_merged[col] = encoded[:, i].astype(int)

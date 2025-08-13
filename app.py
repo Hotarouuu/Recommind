@@ -7,6 +7,7 @@ from recommind_pred import Pipeline
 from recommind_model import model_config
 import os
 from dotenv import load_dotenv
+import numpy as np
 load_dotenv()
 
 models_path = os.getenv('models')
@@ -31,6 +32,8 @@ ORDER BY r.User_id, r.Id, b.categories, b.authors;
 
 df = db.execute(query).fetchdf()
 
+print(df['User_id'])
+
 print('Done!\n')
 
 print('Loading the model...')
@@ -50,7 +53,7 @@ print('Done!\n')
 app = FastAPI()
 
 class PredictRequest(BaseModel):
-    user_id: int  
+    user_id: str  
 
 
 @app.get("/")
@@ -59,7 +62,16 @@ def read_root():
 
 @app.post("/predict")
 def predict(req: PredictRequest):
-    
-    result = pipe.run(req.user_id)
+    print(req.user_id)
+    user_df = pd.DataFrame([{
+        'User_id': req.user_id.lower(),
+        'Id': 'Empty',
+        'categories': 'Empty',
+        'authors': 'Empty'
+    }])
+
+    user_encoded = pipe.ordinal_encoder.transform(user_df[['User_id', 'Id', 'categories', 'authors']])
+    result = pipe.run(user_encoded[0][0])
 
     return {"predictions": result.tolist()}
+
