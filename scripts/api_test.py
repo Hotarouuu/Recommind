@@ -1,16 +1,13 @@
 # Not useful. It's just for me to test the model
 
-from recommind_pred import Pipeline
-import os
-from dotenv import load_dotenv
-import duckdb
 import requests
-load_dotenv()  
-import numpy as np
-import pandas as pd
 
+payload = {
+    "users": [
+        {"id": "A0015610VMNR0JC9XVL1"}
+    ]
+}
 
-payload = payload = {"user_id": 'A00117421L76WVWG4UX95'}
 # Envia o POST
 response = requests.post(
     "http://127.0.0.1:8000/predict",

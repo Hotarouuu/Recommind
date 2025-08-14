@@ -1,13 +1,12 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import List
 import duckdb
 import pandas as pd
-import joblib
 from recommind_pred import Pipeline
 from recommind_model import model_config
 import os
 from dotenv import load_dotenv
-import numpy as np
 load_dotenv()
 
 models_path = os.getenv('models')
@@ -52,8 +51,11 @@ print('Done!\n')
 
 app = FastAPI()
 
+class User(BaseModel):
+    id: str
+
 class PredictRequest(BaseModel):
-    user_id: str  
+    users: List[User]
 
 
 @app.get("/")
@@ -62,16 +64,67 @@ def read_root():
 
 @app.post("/predict")
 def predict(req: PredictRequest):
-    print(req.user_id)
-    user_df = pd.DataFrame([{
-        'User_id': req.user_id.lower(),
-        'Id': 'Empty',
-        'categories': 'Empty',
-        'authors': 'Empty'
-    }])
 
-    user_encoded = pipe.ordinal_encoder.transform(user_df[['User_id', 'Id', 'categories', 'authors']])
-    result = pipe.run(user_encoded[0][0])
+    if len(req.users) > 1:
+        
+        result_dict = {}
+        
+        for user in req.users:
+            
+            print('User --->', user.id)
 
-    return {"predictions": result.tolist()}
+            # Encoding the user ID
+            user_df = pd.DataFrame([{
+                'User_id': user.id.lower(),
+                'Id': 'Empty',
+                'categories': 'Empty',
+                'authors': 'Empty'
+            }])
+
+            user_encoded = pipe.ordinal_encoder.transform(user_df[['User_id', 'Id', 'categories', 'authors']])
+            result = pipe.run(user_encoded[0][0])
+
+            # Decoding the book IDs
+            result_df = pd.DataFrame({
+                'User_id': [user_encoded[0][0]] * len(result),
+                'Id': result,
+                'categories': -1 * len(result),
+                'authors': -1 * len(result)
+            })
+
+            decoded = pipe.ordinal_encoder.inverse_transform(result_df[['User_id', 'Id', 'categories', 'authors']])
+            recommendations = [row[1].upper() for row in decoded]
+            result_dict[user.id] = recommendations  
+
+        return {"predictions": result_dict}
+    
+    else:
+        
+        # For single user
+        user = req.users[0]
+        
+        # Encoding the user ID
+        user_df = pd.DataFrame([{
+            'User_id': user.id.lower(),
+            'Id': 'Empty',
+            'categories': 'Empty',
+            'authors': 'Empty'
+        }])
+
+        user_encoded = pipe.ordinal_encoder.transform(user_df[['User_id', 'Id', 'categories', 'authors']])
+        result = pipe.run(user_encoded[0][0])
+
+        # Decoding the book IDs
+        result_df = pd.DataFrame({
+            'User_id': [user_encoded[0][0]] * len(result),
+            'Id': result,
+            'categories': -1 * len(result),
+            'authors': -1 * len(result)
+        })
+
+        decoded = pipe.ordinal_encoder.inverse_transform(result_df[['User_id', 'Id', 'categories', 'authors']])
+        recommendations = [row[1].upper() for row in decoded]
+
+        return {"predictions": recommendations}
+
 
