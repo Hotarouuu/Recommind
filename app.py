@@ -28,10 +28,10 @@ FROM books b
 JOIN ratings r ON b.Title = r.Title
 ORDER BY r.User_id, r.Id, b.categories, b.authors;
 """
-
-df = db.execute(query).fetchdf()
-
-print(df['User_id'])
+try:
+    df = db.execute(query).fetchdf()
+except duckdb.Error:
+    print('You have to connect to database first. If you already did, please check the .duckdb file.')
 
 print('Done!\n')
 

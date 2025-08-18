@@ -4,7 +4,8 @@ import requests
 
 payload = {
     "users": [
-        {"id": "A0015610VMNR0JC9XVL1"}
+        {"id": "A0015610VMNR0JC9XVL1"},
+        {"id": "A00117421L76WVWG4UX95"}
     ]
 }
 

@@ -39,7 +39,7 @@ def main():
 
         # Importing data
 
-        con = duckdb.connect("scripts/proto.duckdb")
+        con = duckdb.connect("proto.duckdb")
 
  
         query = """
