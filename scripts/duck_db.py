@@ -4,10 +4,11 @@ from dotenv import load_dotenv
 import os
 load_dotenv()  
 
+path = os.getenv('data_dir') # -> check your .env . If you dont have it, create one with the name ".env"
 
 ## Only the datasets
 
-dataset_path = r"C:\Users\lucas\Documents\GitHub\Recommind\data\processed"
+dataset_path = os.path.join(path, 'raw')
 dataset_ratings = os.path.join(dataset_path, "Books_rating.csv")
 dataset_books = os.path.join(dataset_path, "books_data.csv")
 books_data = pl.read_csv(dataset_books)

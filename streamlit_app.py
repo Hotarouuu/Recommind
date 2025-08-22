@@ -37,8 +37,6 @@ users_id = st.selectbox(
     user_list[15:25]
 )
 
-
-
 st.write("You selected:", users_id)
 
 def create_payload(user_ids):
